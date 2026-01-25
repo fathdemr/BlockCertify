@@ -62,15 +62,16 @@ POST /api/upload-diploma
 
 POST /api/verify-diploma
 
-Request (multipart/form-data):
-	•	diploma → PDF file
+**Request (multipart/form-data):**
+- `diploma` → PDF file
 
-  Response:
-  
-  {
-  "exists": true,
-  "arweaveTxId": "Vo_IFmTTOUSELSo3p1Z-bo0uLF7Kzch8cvfOLOaGQik"
+**Response:**
+```json
+{
+  "exists": "true",
+  "arweaTxID": "arweave_Tx_ID"
 }
+```
 
 ⚙️ Environment Variables
 
