@@ -73,10 +73,9 @@ POST /api/verify-diploma
 }
 ```
 
-⚙️ Environment Variables
+### 📄 `.env.example`
 
-Create a .env file in the root directory:
-
+```env
 PORT=8080
 
 # Arweave
@@ -84,14 +83,7 @@ ARWEAVE_KEY=./arweave_keyfile.json
 
 # Polygon
 POLYGON_RPC_URL=https://rpc-amoy.polygon.technology
-PRIVATE_KEY=your_private_key
-CONTRACT_ADDRESS=your_contract_address
-
-Run The Project
-
-go mod tidy
-go run main.go
-
-Server Will Start at:
-
-http://localhost:8080
+PRIVATE_KEY=your_private_key_here
+CONTRACT_ADDRESS=your_contract_address_here
+CHAIN_ID=80002
+```
