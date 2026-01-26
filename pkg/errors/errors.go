@@ -16,6 +16,12 @@ var (
 	ErrDiplomaExists       = "DIPLOMA_EXISTS"
 	ErrInsufficientBalance = "INSUFFICIENT_BALANCE"
 	ErrVerificationFailed  = "VERIFICATION_FAILED"
+	ErrTokenExpired        = "TOKEN_EXPIRED"
+	ErrUserExists          = "USER_EXISTS"
+	ErrInvalidCredentials  = "INVALID_CREDENTIALS"
+	ErrTokenCreateFailed   = "TOKEN_CREATE_FAILED"
+	ErrInvalidToken        = "INVALID_TOKEN"
+	ErrInvalidRequest      = "INVALID_REQUEST"
 )
 
 func New(code, message string, err error) *AppError {
