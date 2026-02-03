@@ -6,17 +6,23 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserRepository struct {
+type UserRepository interface {
+	FindByEmail(email string) (*models.User, error)
+	Exists(email string) (bool, error)
+	Create(user *models.User) error
+}
+
+type userRepository struct {
 	db *gorm.DB
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &userRepository{
 		db: db,
 	}
 }
 
-func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
+func (r *userRepository) FindByEmail(email string) (*models.User, error) {
 	var user models.User
 	err := r.db.Where("email = ?", email).First(&user).Error
 	if err != nil {
@@ -26,15 +32,20 @@ func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 }
 
 // Exists 1 -> User exists 0 -> User not exists
-func (r *UserRepository) Exists(email string) (bool, error) {
-	var user models.User
-	err := r.db.Where("email = ?", email).First(&user).Error
+func (r *userRepository) Exists(email string) (bool, error) {
+	var count int64
+
+	err := r.db.Model(&models.User{}).
+		Where("email = ?", email).
+		Count(&count).Error
+
 	if err != nil {
-		return false, nil
+		return false, err
 	}
-	return true, nil
+
+	return count > 0, nil
 }
 
-func (r *UserRepository) Create(user *models.User) error {
+func (r *userRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
 }

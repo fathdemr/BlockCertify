@@ -19,6 +19,12 @@ func Init(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	if err := db.AutoMigrate(&models.User{}); err != nil {
 		return nil, err
 	}
+	if err := db.AutoMigrate(&models.Diploma{}); err != nil {
+		return nil, err
+	}
+	if err := db.AutoMigrate(&models.DiplomaMetaData{}); err != nil {
+		return nil, err
+	}
 
 	return db, nil
 }

@@ -32,16 +32,20 @@ func main() {
 	defer contractRepo.Close()
 
 	userRepo := repositories.NewUserRepository(db)
+	diplomaRepo := repositories.NewDiplomaRepository(db)
 
 	tokenHelper := security.NewJWTHelper(
 		cfg.JWTConfig.JWTSecret,
 		cfg.JWTConfig.JWTExpireHours)
 
+	//Mock Services
+	//arweaveService := services.NewMockArweaveService("DEBUG_FAKE_ARWEAVE_TX")
+	//blockchainService := services.NewMockBlockchainService()
+
 	//Initialize services
-	//arweaveService := services.NewMockArweaveService("DEBUG_FAKE_ARWEAVE_TX_ID_123")
 	arweaveService := services.NewArweaveService(cfg)
 	blockchainService := services.NewBlockChainService(cfg, contractRepo)
-	diplomaService := services.NewDiplomaService(arweaveService, blockchainService)
+	diplomaService := services.NewDiplomaService(arweaveService, blockchainService, diplomaRepo)
 	userService := services.NewUserService(userRepo, tokenHelper)
 
 	//Initialize handlers
@@ -51,7 +55,7 @@ func main() {
 	//Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/upload-diploma", diplomaHandler.Upload)
-	mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
+	//mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
 	mux.HandleFunc("/api/user/login", userHandler.Login)
 	mux.HandleFunc("/api/user/register", userHandler.Register)
 	mux.Handle("/", http.FileServer(http.Dir("public")))

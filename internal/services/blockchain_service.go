@@ -2,7 +2,7 @@ package services
 
 import (
 	"BlockCertify/internal/config"
-	"BlockCertify/internal/models"
+	"BlockCertify/internal/dto"
 	"BlockCertify/internal/repositories"
 	apperrors "BlockCertify/pkg/errors"
 	"crypto/ecdsa"
@@ -14,7 +14,7 @@ import (
 )
 
 type BlockchainService interface {
-	StoreDiploma(diplomaHash, arweaveTxID string) (*models.BlockchainResult, error)
+	StoreDiploma(diplomaHash, arweaveTxID string) (*dto.BlockchainResult, error)
 	VerifyDiploma(diplomaHash string) (bool, string, error)
 }
 
@@ -36,7 +36,7 @@ func NewBlockChainService(cfg *config.Config, repo *repositories.ContractReposit
 	}
 }
 
-func (s *blockchainService) StoreDiploma(diplomaHash, arweaveTxID string) (*models.BlockchainResult, error) {
+func (s *blockchainService) StoreDiploma(diplomaHash, arweaveTxID string) (*dto.BlockchainResult, error) {
 	// Check if diploma already exists
 	exists, _, err := s.repo.VerifyDiploma(diplomaHash)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *blockchainService) StoreDiploma(diplomaHash, arweaveTxID string) (*mode
 
 	log.Printf("Transaction confirmed in block %d", receipt.BlockNumber.Uint64())
 
-	return &models.BlockchainResult{
+	return &dto.BlockchainResult{
 		TransactionHash: receipt.TxHash.Hex(),
 		BlockNumber:     receipt.BlockNumber.Uint64(),
 	}, nil

@@ -18,11 +18,11 @@ type UserService interface {
 }
 
 type userService struct {
-	repo        *repositories.UserRepository
+	repo        repositories.UserRepository
 	tokenHelper security.TokenHelper
 }
 
-func NewUserService(repo *repositories.UserRepository, tokenHelper security.TokenHelper) UserService {
+func NewUserService(repo repositories.UserRepository, tokenHelper security.TokenHelper) UserService {
 
 	return &userService{
 		repo:        repo,

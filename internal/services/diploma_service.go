@@ -1,30 +1,38 @@
 package services
 
 import (
+	"BlockCertify/internal/dto"
+	"BlockCertify/internal/helper"
 	"BlockCertify/internal/models"
+	"BlockCertify/internal/repositories"
 	apperrors "BlockCertify/pkg/errors"
 	"fmt"
 	"log"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type DiplomaService interface {
-	Upload(filePath, fileHash string) (*models.UploadResponse, error)
-	Verify(diplomaHash string) (*models.VerifyResponse, error)
+	Upload(filePath, fileHash string, metadata dto.DiplomaMetadataRequest) (*dto.UploadResponse, error)
+	Verify(diplomaHash string) (*dto.VerifyResponse, error)
 }
 
 type diplomaService struct {
 	arweave    ArweaveService
 	blockchain BlockchainService
+	repo       repositories.DiplomaRepository
 }
 
-func NewDiplomaService(arweave ArweaveService, blockchain BlockchainService) DiplomaService {
+func NewDiplomaService(arweave ArweaveService, blockchain BlockchainService, repo repositories.DiplomaRepository) DiplomaService {
 	return &diplomaService{
+		repo:       repo,
 		arweave:    arweave,
 		blockchain: blockchain,
 	}
 }
 
-func (s *diplomaService) Upload(filePath, fileHash string) (*models.UploadResponse, error) {
+func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMetadataRequest) (*dto.UploadResponse, error) {
 
 	//Check before upload the arweave if diploma already exists
 	log.Printf("Checking if diploma already exists: %s", fileHash)
@@ -57,7 +65,48 @@ func (s *diplomaService) Upload(filePath, fileHash string) (*models.UploadRespon
 		return nil, err
 	}
 
-	return &models.UploadResponse{
+	tx := s.repo.CreateTransaction()
+
+	diplomaID := uuid.New()
+
+	owner := fmt.Sprintf("%s %s", reqMeta.FirstName, reqMeta.LastName)
+
+	diploma := models.Diploma{
+		ID:          diplomaID,
+		PublicID:    helper.GenerateDiplomaPublicIDFromUUID(diplomaID),
+		Hash:        fileHash,
+		ArweaveTxID: arweaveTxID,
+		Owner:       owner,
+		Timestamp:   time.Time{},
+	}
+
+	if err := tx.Create(&diploma).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	diplomaMetadata := models.DiplomaMetaData{
+		ID:             uuid.New(),
+		DiplomaID:      diploma.ID,
+		FirstName:      reqMeta.FirstName,
+		LastName:       reqMeta.LastName,
+		Email:          reqMeta.Email,
+		University:     reqMeta.University,
+		Faculty:        reqMeta.Faculty,
+		Department:     reqMeta.Department,
+		GraduationYear: reqMeta.GraduationYear,
+		StudentNumber:  reqMeta.StudentNumber,
+		Nationality:    reqMeta.Nationality,
+	}
+
+	if err := tx.Create(&diplomaMetadata).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	tx.Commit()
+
+	return &dto.UploadResponse{
 		Success:       true,
 		DiplomaHash:   fileHash,
 		ArweaveTxID:   arweaveTxID,
@@ -67,7 +116,7 @@ func (s *diplomaService) Upload(filePath, fileHash string) (*models.UploadRespon
 	}, nil
 }
 
-func (s *diplomaService) Verify(diplomaHash string) (*models.VerifyResponse, error) {
+func (s *diplomaService) Verify(diplomaHash string) (*dto.VerifyResponse, error) {
 	log.Printf("%s - Verifying diploma on Polygon...", diplomaHash)
 
 	exists, arweaveTxID, err := s.blockchain.VerifyDiploma(diplomaHash)
@@ -75,7 +124,7 @@ func (s *diplomaService) Verify(diplomaHash string) (*models.VerifyResponse, err
 		return nil, err
 	}
 
-	response := &models.VerifyResponse{
+	response := &dto.VerifyResponse{
 		Verified:    exists,
 		DiplomaHash: diplomaHash,
 	}
