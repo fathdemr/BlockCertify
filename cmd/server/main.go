@@ -9,6 +9,7 @@ import (
 	"BlockCertify/internal/services"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/rs/cors"
 )
@@ -55,14 +56,21 @@ func main() {
 	//Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/upload-diploma", diplomaHandler.Upload)
-	//mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
+	mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
 	mux.HandleFunc("/api/user/login", userHandler.Login)
 	mux.HandleFunc("/api/user/register", userHandler.Register)
 	mux.Handle("/", http.FileServer(http.Dir("public")))
 
 	//Setup CORS
-	handler := cors.Default().Handler(mux)
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           int((12 * time.Hour).Seconds()),
+	})
 
+	handler := c.Handler(mux)
 	//Start server
 	log.Printf("Server running on port %s", cfg.Server.Port)
 	if err := http.ListenAndServe(":"+cfg.Server.Port, handler); err != nil {

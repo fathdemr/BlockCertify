@@ -10,12 +10,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type DiplomaService interface {
 	Upload(filePath, fileHash string, metadata dto.DiplomaMetadataRequest) (*dto.UploadResponse, error)
-	Verify(diplomaHash string) (*dto.VerifyResponse, error)
+	Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error)
 }
 
 type diplomaService struct {
@@ -67,15 +67,20 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 
 	tx := s.repo.CreateTransaction()
 
-	diplomaID := uuid.New()
+	diplomaID, err := uuid.NewV7()
 
 	owner := fmt.Sprintf("%s %s", reqMeta.FirstName, reqMeta.LastName)
+	polygonURL := fmt.Sprintf("https://amoy.polygonscan.com/tx/%s", result.TransactionHash)
+	arweaveURL := fmt.Sprintf("https://arweave.net/%s", arweaveTxID)
 
 	diploma := models.Diploma{
 		ID:          diplomaID,
 		PublicID:    helper.GenerateDiplomaPublicIDFromUUID(diplomaID),
 		Hash:        fileHash,
 		ArweaveTxID: arweaveTxID,
+		ArweaveURL:  arweaveURL,
+		PolygonTxID: result.TransactionHash,
+		PolygonURL:  polygonURL,
 		Owner:       owner,
 		Timestamp:   time.Time{},
 	}
@@ -86,7 +91,7 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 	}
 
 	diplomaMetadata := models.DiplomaMetaData{
-		ID:             uuid.New(),
+		ID:             uuid.Must(uuid.NewV7()),
 		DiplomaID:      diploma.ID,
 		FirstName:      reqMeta.FirstName,
 		LastName:       reqMeta.LastName,
@@ -110,28 +115,71 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 		Success:       true,
 		DiplomaHash:   fileHash,
 		ArweaveTxID:   arweaveTxID,
-		ArweaveURL:    fmt.Sprintf("https://arweave.net/%s", arweaveTxID),
+		ArweaveURL:    arweaveURL,
 		PolygonTxHash: result.TransactionHash,
 		BlockNumber:   result.BlockNumber,
 	}, nil
 }
 
-func (s *diplomaService) Verify(diplomaHash string) (*dto.VerifyResponse, error) {
-	log.Printf("%s - Verifying diploma on Polygon...", diplomaHash)
+func (s *diplomaService) ResolveHashFromReference(polygonTx, arweaveTxID string) (string, error) {
+	log.Println("Resolving diploma hash from references...")
 
-	exists, arweaveTxID, err := s.blockchain.VerifyDiploma(diplomaHash)
-	if err != nil {
-		return nil, err
+	// 1️⃣ Try Polygon reference first (strongest proof)
+	if polygonTx != "" {
+		log.Printf("Resolving hash from polygon tx: %s", polygonTx)
+
+		hash, err := s.repo.GetHashFromPolygonTxID(polygonTx)
+		if err == nil && hash != "" {
+			return hash, nil
+		}
+
+		log.Printf("Polygon tx not found or error: %v", err)
 	}
 
-	response := &dto.VerifyResponse{
-		Verified:    exists,
-		DiplomaHash: diplomaHash,
+	// 2️⃣ Try Arweave reference
+	if arweaveTxID != "" {
+		log.Printf("Resolving hash from arweave tx: %s", arweaveTxID)
+
+		hash, err := s.repo.GetHashFromArweaveTxID(arweaveTxID)
+		if err == nil && hash != "" {
+			return hash, nil
+		}
+
+		log.Printf("Arweave tx not found or error: %v", err)
 	}
 
-	if exists {
-		response.ArweaveTxID = arweaveTxID
-		response.ArweaveURL = fmt.Sprintf("https://arweave.net/%s", arweaveTxID)
+	return "", fmt.Errorf("could not resolve diploma hash from provided references")
+}
+
+func (s *diplomaService) Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error) {
+
+	var err error
+	var response dto.VerifyResponse
+	diplomaID := req.DiplomaID
+
+	response.Verified = false
+
+	// Fetch metadata from DB if it exists
+	diploma, err := s.repo.GetByDiplomaID(diplomaID)
+	if err == nil && diploma != nil {
+		response.Verified = true
+		response.StudentName = diploma.Owner
+		if diploma.MetaData.ID != uuid.Nil {
+			response.University = diploma.MetaData.University
+			response.Degree = fmt.Sprintf("%s - %s", diploma.MetaData.Faculty, diploma.MetaData.Department)
+			response.IssueDate = diploma.CreatedAt.Format("2006-01-02")
+		}
+		response.PolygonTxHash = diploma.PolygonTxID
+		response.ArweaveTxID = diploma.ArweaveTxID
+		response.ArweaveURL = diploma.ArweaveURL
+		response.DiplomaHash = diploma.Hash
+		response.DiplomaID = diplomaID
+	}
+
+	if !response.Verified {
+		return dto.VerifyResponse{
+			Verified: false,
+		}, fmt.Errorf("diploma not found")
 	}
 
 	return response, nil

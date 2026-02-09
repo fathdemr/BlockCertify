@@ -20,7 +20,7 @@ func NewFileManager(uploadDir string) *FileManager {
 	}
 }
 
-func (fm *FileManager) SaveUploadedFile(part *multipart.Part, filename string) (string, error) {
+func (fm *FileManager) SaveFile(src io.Reader, filename string) (string, error) {
 	filePath := filepath.Join(fm.uploadDir, filename)
 
 	dst, err := os.Create(filePath)
@@ -29,12 +29,16 @@ func (fm *FileManager) SaveUploadedFile(part *multipart.Part, filename string) (
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, part); err != nil {
+	if _, err := io.Copy(dst, src); err != nil {
 		_ = os.Remove(filePath)
 		return "", err
 	}
 
 	return filePath, nil
+}
+
+func (fm *FileManager) SaveUploadedFile(part *multipart.Part, filename string) (string, error) {
+	return fm.SaveFile(part, filename)
 }
 
 func (fm *FileManager) DeleteFile(filepath string) error {

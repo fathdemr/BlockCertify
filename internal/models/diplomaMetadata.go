@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 const TableName = "diploma_metadata"
@@ -13,8 +13,8 @@ func (DiplomaMetaData) TableName() string {
 }
 
 type DiplomaMetaData struct {
-	ID             uuid.UUID `json:"id" gorm:"primary_key" binding:"required"`
-	DiplomaID      uuid.UUID `json:"diplomaId" gorm:"uniqueIndex" binding:"required"`
+	ID             uuid.UUID `json:"id" gorm:"primary_key;type:uuid" binding:"required"`
+	DiplomaID      uuid.UUID `json:"diplomaId" gorm:"uniqueIndex;type:uuid" binding:"required"`
 	FirstName      string
 	LastName       string
 	Email          string

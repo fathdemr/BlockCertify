@@ -15,6 +15,7 @@ type User struct {
 	Email       string `gorm:"uniqueIndex;not null"`
 	Password    string
 	Institution string
+	Role        string `json:"role"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

@@ -6,6 +6,7 @@ import (
 	"BlockCertify/internal/services"
 	"BlockCertify/internal/utils"
 	apperrors "BlockCertify/pkg/errors"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -129,44 +130,20 @@ func (h *DiplomaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	utils.RespondJSON(w, response, http.StatusOK)
 }
 
-/*
 func (h *DiplomaHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		utils.RespondError(w, "Method not allowed", "", "", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse multipart form
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		utils.RespondError(w, "Failed to parse form", err.Error(), apperrors.ErrInvalidFile, http.StatusBadRequest)
-		return
-	}
-
-	file, header, err := r.FormFile("diploma")
-	if err != nil {
-		utils.RespondError(w, "No file uploaded", err.Error(), apperrors.ErrInvalidFile, http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Save file
-	filename := filepath.Base(header.Filename)
-	filePath, err := h.fileManager.SaveUploadedFile(file, filename)
-	if err != nil {
-		utils.RespondError(w, "Failed to save file", err.Error(), apperrors.ErrInvalidFile, http.StatusInternalServerError)
-		return
-	}
-	defer h.fileManager.DeleteFile(filePath)
-
-	// Hash file
-	diplomaHash, err := utils.HashFile(filePath)
-	if err != nil {
-		utils.RespondError(w, "Failed to hash file", err.Error(), apperrors.ErrHashingFailed, http.StatusInternalServerError)
+	var req dto.VerifyDiplomaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondError(w, "Invalid request", err.Error(), apperrors.ErrInvalidRequest, http.StatusBadRequest)
 		return
 	}
 
 	// Verify diploma
-	response, err := h.service.Verify(diplomaHash)
+	response, err := h.service.Verify(req)
 	if err != nil {
 		appErr, ok := err.(*apperrors.AppError)
 		if ok {
@@ -179,8 +156,6 @@ func (h *DiplomaHandler) Verify(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondJSON(w, response, http.StatusOK)
 }
-
-*/
 
 func validateUploadMetadata(meta dto.DiplomaMetadataRequest) error {
 	if strings.TrimSpace(meta.FirstName) == "" {

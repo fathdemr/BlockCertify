@@ -79,9 +79,15 @@ func (s *userService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 		return nil, apperrors.New(apperrors.ErrTokenCreateFailed, "Token creation failed", err)
 	}
 
+	role := user.Role
+	if role == "" {
+		role = "admin" // Default for now
+	}
+
 	return &dto.LoginResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   s.tokenHelper.ExpiresInSeconds(),
+		Token:     token,
+		TokenType: "Bearer",
+		ExpiresIn: s.tokenHelper.ExpiresInSeconds(),
+		Role:      role,
 	}, nil
 }
