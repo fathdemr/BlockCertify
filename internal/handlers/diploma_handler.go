@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -155,6 +156,40 @@ func (h *DiplomaHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondJSON(w, response, http.StatusOK)
+}
+
+func (h *DiplomaHandler) GetDiplomaById(w http.ResponseWriter, r *http.Request) {
+
+	publicID := strings.TrimPrefix(r.URL.Path, "/api/diploma/")
+	publicID = strings.TrimSpace(publicID)
+
+	if publicID == "" {
+		utils.RespondError(w, "Invalid public ID", "", apperrors.ErrInvalidRequest, http.StatusBadRequest)
+	}
+
+	slog.Info("stream diploma request", "publicID", publicID)
+
+	arweaveUrl := h.service.GetArweaveUrlByDiplomaID(publicID)
+
+	resp, err := http.Get(arweaveUrl)
+	if err != nil {
+		slog.Error("Failed to fetch diploma", "err", err)
+		utils.RespondError(w, "Failed to fetch diploma", err.Error(), "", http.StatusBadRequest)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("arweave returned non-200 status code", "statusCode", resp.StatusCode)
+		utils.RespondError(w, "file not found", "", "", resp.StatusCode)
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "inline; filename=diploma.pdf")
+
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		slog.Error("Failed to write response", "err", err)
+	}
 }
 
 func validateUploadMetadata(meta dto.DiplomaMetadataRequest) error {

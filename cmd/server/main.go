@@ -4,6 +4,7 @@ import (
 	"BlockCertify/internal/config"
 	"BlockCertify/internal/database"
 	"BlockCertify/internal/handlers"
+	"BlockCertify/internal/logger"
 	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/security"
 	"BlockCertify/internal/services"
@@ -15,6 +16,8 @@ import (
 )
 
 func main() {
+	logger.Init()
+
 	//Load conf
 	cfg, err := config.Load()
 	if err != nil {
@@ -59,6 +62,7 @@ func main() {
 	mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
 	mux.HandleFunc("/api/user/login", userHandler.Login)
 	mux.HandleFunc("/api/user/register", userHandler.Register)
+	mux.HandleFunc("/api/diploma/", diplomaHandler.GetDiplomaById)
 	mux.Handle("/", http.FileServer(http.Dir("public")))
 
 	//Setup CORS

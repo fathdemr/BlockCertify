@@ -18,3 +18,10 @@ func (m *MockArweaveService) Upload(filePath, fileHash string) (string, error) {
 
 	return m.TxID, nil
 }
+
+func (m *MockArweaveService) GetFile(txID string) ([]byte, error) {
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	return []byte("mock pdf data"), nil
+}

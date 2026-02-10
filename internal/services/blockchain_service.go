@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -83,7 +84,7 @@ func (s *blockchainService) StoreDiploma(diplomaHash, arweaveTxID string) (*dto.
 		)
 	}
 
-	log.Printf("Transaction confirmed in block %d", receipt.BlockNumber.Uint64())
+	slog.Info("Transaction confirmed in block %d", receipt.BlockNumber.Uint64())
 
 	return &dto.BlockchainResult{
 		TransactionHash: receipt.TxHash.Hex(),

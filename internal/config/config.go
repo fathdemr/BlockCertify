@@ -59,13 +59,13 @@ func Load() (*Config, error) {
 	chainIDStr := getEnvOrDefault("POLYGON_CHAIN_ID", "80002")
 	chainID, err := strconv.Atoi(chainIDStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not parse POLYGON_CHAIN_ID from env var: %w", err)
 	}
 
 	jwtExpStr := os.Getenv("JWT_EXP_HOURS")
 	jwtExp, err := strconv.Atoi(jwtExpStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not parse JWT_EXP_HOURS from env var: %w", err)
 	}
 
 	cfg := &Config{
@@ -101,7 +101,7 @@ func Load() (*Config, error) {
 	}
 
 	if err := cfg.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not validate config: %w", err)
 	}
 	return cfg, nil
 }

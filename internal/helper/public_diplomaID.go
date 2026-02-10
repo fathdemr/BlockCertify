@@ -8,6 +8,7 @@ import (
 )
 
 func GenerateDiplomaPublicIDFromUUID(id uuid.UUID) string {
-	short := strings.ToUpper(strings.ReplaceAll(id.String()[12:], "-", ""))
-	return fmt.Sprintf("BC-%s", short)
+	short := strings.ToUpper(strings.ReplaceAll(id.String(), "-", ""))
+	last12 := short[len(short)-12:]
+	return fmt.Sprintf("BC-%s", strings.ToUpper(last12))
 }

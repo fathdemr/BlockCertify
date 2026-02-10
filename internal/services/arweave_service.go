@@ -3,8 +3,8 @@ package services
 import (
 	"BlockCertify/internal/config"
 	apperrors "BlockCertify/pkg/errors"
-	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 	"os"
 	"strconv"
@@ -29,7 +29,7 @@ func NewArweaveService(cfg *config.Config) ArweaveService {
 
 	wallet, err := goar.NewWalletFromPath("./arweave_keyfile.json", "https://arweave.net")
 	if err != nil {
-		log.Fatalf("Failed to create Arweave wallet: %v", err)
+		slog.Error("Failed to create Arweave wallet", "err", err)
 	}
 
 	return &arweaveService{
@@ -85,13 +85,13 @@ func (s *arweaveService) Upload(filePath, fileHash string) (string, error) {
 func (s *arweaveService) checkBalanceForData(data []byte) error {
 	balance, err := s.client.GetWalletBalance(s.wallet.Signer.Address)
 	if err != nil {
-		return err
+		slog.Error("Failed to get wallet balance", "err", err)
 	}
 
 	//Estimate transaction cost based on data size(WINSTON)
 	priceWinston, err := s.client.GetTransactionPrice(len(data), nil)
 	if err != nil {
-		return err
+		slog.Error("Failed to get transaction price", "err", err)
 	}
 
 	//Convert winston -> AR
@@ -100,7 +100,7 @@ func (s *arweaveService) checkBalanceForData(data []byte) error {
 	log.Printf("Arweave Balance: %s AR, estimated tx cost: %s AR", balance.Text('f', 12), priceAR.Text('f', 12))
 
 	if balance.Cmp(priceAR) < 0 {
-		return fmt.Errorf("Insufficient Arweave balance: required %s AR, avaliable %s AR", priceAR.Text('f', 12), priceAR.Text('s', 12))
+		slog.Error("Insufficient Arweave balance: required %s AR, available %s AR", priceAR.Text('f', 12), priceAR.Text('s', 12))
 	}
 
 	return nil
