@@ -74,7 +74,7 @@ func (s *userService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 		return nil, apperrors.New(apperrors.ErrInvalidCredentials, "Invalid email or password", nil)
 	}
 
-	token, err := s.tokenHelper.Create(user.Email)
+	token, err := s.tokenHelper.CreateToken(user.Email)
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrTokenCreateFailed, "Token creation failed", err)
 	}

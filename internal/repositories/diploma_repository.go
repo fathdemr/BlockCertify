@@ -11,6 +11,7 @@ type DiplomaRepository interface {
 	GetByDiplomaID(diplomaID string) (*models.Diploma, error)
 	GetHashFromArweaveTxID(arweaveTxID string) (string, error)
 	GetHashFromPolygonTxID(polygonTxID string) (string, error)
+	GetAllDiplomaFromDatabase() <-chan models.Diploma
 }
 
 type diplomaRepository struct {
@@ -54,4 +55,25 @@ func (r *diplomaRepository) GetHashFromPolygonTxID(polygonTxID string) (string, 
 	}
 	hash := diploma.Hash
 	return hash, nil
+}
+
+func (r *diplomaRepository) GetAllDiplomaFromDatabase() <-chan models.Diploma {
+
+	ch := make(chan models.Diploma)
+
+	go func() {
+		defer close(ch)
+
+		var diplomas []models.Diploma
+		if err := r.db.Preload("MetaData").Find(&diplomas).Error; err != nil {
+			return
+		}
+
+		for _, diploma := range diplomas {
+			ch <- diploma
+		}
+
+	}()
+
+	return ch
 }

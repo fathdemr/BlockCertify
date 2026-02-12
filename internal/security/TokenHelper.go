@@ -10,9 +10,10 @@ import (
 )
 
 type TokenHelper interface {
-	Create(email string) (string, error)
+	CreateToken(email string) (string, error)
 	Verify(tokenString string) (jwt.MapClaims, error)
 	ExpiresInSeconds() int64
+	GetJwtSecretKey() []byte
 }
 
 type jwtHelper struct {
@@ -27,7 +28,7 @@ func NewJWTHelper(secret string, expireHours time.Duration) TokenHelper {
 	}
 }
 
-func (j *jwtHelper) Create(email string) (string, error) {
+func (j *jwtHelper) CreateToken(email string) (string, error) {
 
 	claims := jwt.MapClaims{
 		"email": email,
@@ -71,4 +72,8 @@ func (j *jwtHelper) Verify(tokenString string) (jwt.MapClaims, error) {
 
 func (j *jwtHelper) ExpiresInSeconds() int64 {
 	return int64(j.expire.Seconds())
+}
+
+func (j *jwtHelper) GetJwtSecretKey() []byte {
+	return j.secret
 }

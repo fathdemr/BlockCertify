@@ -19,6 +19,23 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error?.response?.status === 401) {
+            console.warn("Session expired -> redirecting to login");
+
+            alert("Oturumunuz zaman aşımına uğradı. Tekrar giriş yapın.")
+
+            localStorage.removeItem('blockcertify_user');
+
+            window.location.href = '/login';
+
+            return Promise.reject(error);
+        }
+    }
+)
+
 export const diplomaService = {
     upload: async (formData: FormData) => {
         try {
@@ -40,6 +57,16 @@ export const diplomaService = {
             return response.data;
         } catch (error) {
             console.error('Error verifying diploma:', error);
+            throw error;
+        }
+    },
+
+    getAllDiplomas: async () => {
+        try{
+            const response = await api.get('/diploma-records');
+            return response.data;
+        }catch (error) {
+            console.error('Error retrieving diploma:', error);
             throw error;
         }
     },

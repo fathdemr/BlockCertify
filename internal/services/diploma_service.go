@@ -19,6 +19,7 @@ type DiplomaService interface {
 	Upload(filePath, fileHash string, metadata dto.DiplomaMetadataRequest) (*dto.UploadResponse, error)
 	Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error)
 	GetArweaveUrlByDiplomaID(diplomaID string) string
+	GetAllDiplomaFromDatabase() []dto.HistoryResponse
 }
 
 type diplomaService struct {
@@ -218,4 +219,26 @@ func (s *diplomaService) GetArweaveUrlByDiplomaID(diplomaID string) string {
 	}
 
 	return arweaveUrl
+}
+
+func (s *diplomaService) GetAllDiplomaFromDatabase() []dto.HistoryResponse {
+
+	ch := s.repo.GetAllDiplomaFromDatabase()
+
+	var response []dto.HistoryResponse
+
+	for d := range ch {
+
+		resp := dto.HistoryResponse{
+			DiplomaID:  d.PublicID,
+			UserName:   d.Owner,
+			Department: d.MetaData.Department,
+			CreateDate: d.CreatedAt,
+			DiplomaPdf: d.ArweaveURL,
+		}
+
+		response = append(response, resp)
+	}
+
+	return response
 }

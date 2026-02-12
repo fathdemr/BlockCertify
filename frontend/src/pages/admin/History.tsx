@@ -1,20 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ExternalLink,
     Search,
     Filter,
     Download
 } from 'lucide-react';
+import { diplomaService } from '../../services/api';
+
 
 const History: React.FC = () => {
-    const logs = [
-        { id: 'BC-2025-441', name: 'John Doe', type: 'Issuance', status: 'Success', date: '2026-02-02 23:10', hash: '0x742d...44e' },
-        { id: 'BC-2025-440', name: 'Jane Smith', type: 'Issuance', status: 'Success', date: '2026-02-02 22:15', hash: '0x815f...12a' },
-        { id: 'BC-1234567', name: 'Verification Unit', type: 'Self-Verify', status: 'Valid', date: '2026-02-02 21:05', hash: 'N/A' },
-        { id: 'BC-2025-439', name: 'Robert Brown', type: 'Issuance', status: 'Success', date: '2026-02-02 18:42', hash: '0x921c...55d' },
-        { id: 'BC-2025-438', name: 'Emily Davis', type: 'Issuance', status: 'Success', date: '2026-02-01 14:20', hash: '0x012b...b3c' },
-        { id: 'BC-2025-437', name: 'Michael Wilson', type: 'Issuance', status: 'Success', date: '2026-02-01 10:15', hash: '0x334a...d4e' },
-    ];
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDiplomas = async () => {
+            try {
+                const data = await diplomaService.getAllDiplomas();
+                setLogs(data);
+            } catch (err) {
+                console.error("Failed to fetch diplomas", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDiplomas();
+    }, []);
 
     return (
         <div className="space-y-8">
@@ -46,29 +57,39 @@ const History: React.FC = () => {
                 <table className="w-full text-left font-display">
                     <thead>
                         <tr className="bg-white/5 border-b border-white/10">
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Entry ID</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Description</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Type</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Date</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">TX Proof</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Diploma ID</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Owner</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Department</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Registered Date</th>
+                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Diploma PDF</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-sm">
-                        {logs.map((log, i) => (
-                            <tr key={i} className="hover:bg-white/5 transition-colors group">
-                                <td className="px-6 py-4 font-mono text-brand-secondary">{log.id}</td>
-                                <td className="px-6 py-4 text-white font-medium">{log.name}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${log.type === 'Issuance' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-brand-accent/10 text-brand-accent'
-                                        }`}>
-                                        {log.type}
-                                    </span>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={5} className="text-center py-10 text-gray-400">
+                                    Loading diplomas...
                                 </td>
-                                <td className="px-6 py-4 text-gray-400">{log.date}</td>
+                            </tr>
+                        ) : logs.map((log, i) => (
+                            <tr key={i} className="hover:bg-white/5 transition-colors group">
+                                <td className="px-6 py-4 font-mono text-brand-secondary">{log.diplomaId}</td>
+                                <td className="px-6 py-4 text-white font-medium">{log.userName}</td>
                                 <td className="px-6 py-4">
-                                    <button className="p-2 bg-white/5 rounded-lg border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {log.department}
+                                </td>
+                                <td className="px-6 py-4 text-gray-400">
+                                    {new Date(log.createDate).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4">
+                                    <a
+                                        href={diplomaService.getDiplomaFile(log.diplomaId)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="p-2 bg-white/5 rounded-lg border border-white/5 opacity-80 hover:opacity-100 transition-opacity inline-flex"
+                                    >
                                         <ExternalLink className="h-4 w-4 text-gray-500 hover:text-white" />
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                         ))}

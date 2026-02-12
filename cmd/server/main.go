@@ -5,14 +5,15 @@ import (
 	"BlockCertify/internal/database"
 	"BlockCertify/internal/handlers"
 	"BlockCertify/internal/logger"
+	"BlockCertify/internal/middleware"
 	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/security"
 	"BlockCertify/internal/services"
 	"log"
-	"net/http"
 	"time"
 
-	"github.com/rs/cors"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -23,6 +24,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	r := gin.Default()
+
+	// CORS config (allow frontend localhost:5173)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	db, err := database.Init(cfg.Db)
 	if err != nil {
@@ -51,33 +64,22 @@ func main() {
 	blockchainService := services.NewBlockChainService(cfg, contractRepo)
 	diplomaService := services.NewDiplomaService(arweaveService, blockchainService, diplomaRepo)
 	userService := services.NewUserService(userRepo, tokenHelper)
+	AuthMiddleware := middleware.NewAuthMiddleware(tokenHelper, userRepo)
 
 	//Initialize handlers
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	//Setup routes
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/upload-diploma", diplomaHandler.Upload)
-	mux.HandleFunc("/api/verify-diploma", diplomaHandler.Verify)
-	mux.HandleFunc("/api/user/login", userHandler.Login)
-	mux.HandleFunc("/api/user/register", userHandler.Register)
-	mux.HandleFunc("/api/diploma/", diplomaHandler.GetDiplomaById)
-	mux.Handle("/", http.FileServer(http.Dir("public")))
+	r.POST("/api/upload-diploma", diplomaHandler.Upload)
+	r.POST("/api/verify-diploma", diplomaHandler.Verify)
+	r.POST("/api/user/login", userHandler.Login)
+	r.POST("/api/user/register", userHandler.Register)
+	r.GET("/api/diploma-records", AuthMiddleware.Authorize(), diplomaHandler.GetDiplomaRecords)
 
-	//Setup CORS
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		AllowCredentials: true,
-		MaxAge:           int((12 * time.Hour).Seconds()),
-	})
-
-	handler := c.Handler(mux)
+	r.Static("/public", "./public")
 	//Start server
 	log.Printf("Server running on port %s", cfg.Server.Port)
-	if err := http.ListenAndServe(":"+cfg.Server.Port, handler); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	if err := r.Run(":" + cfg.Server.Port); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
 	}
 }

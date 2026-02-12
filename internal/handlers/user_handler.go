@@ -3,11 +3,11 @@ package handlers
 import (
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/services"
-	"BlockCertify/internal/utils"
-	"encoding/json"
 	"net/http"
 
 	apperrors "BlockCertify/pkg/errors"
+
+	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
@@ -20,16 +20,11 @@ func NewUserHandler(service services.UserService) *UserHandler {
 	}
 }
 
-func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != http.MethodPost {
-		utils.RespondError(w, "Method not allowed", "", "", http.StatusMethodNotAllowed)
-		return
-	}
+func (h *UserHandler) Login(c *gin.Context) {
 
 	var req dto.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondError(w, "Invalid request body", err.Error(), apperrors.ErrInvalidRequest, http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -41,24 +36,29 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 			if appErr.Err != nil {
 				details = appErr.Err.Error()
 			}
-			utils.RespondError(w, appErr.Message, details, appErr.Code, http.StatusBadRequest)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   appErr.Message,
+				"details": details,
+			})
 			return
 		}
-		utils.RespondError(w, "Login failed", err.Error(), "", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Login failed",
+		})
 		return
 	}
-	utils.RespondJSON(w, response, http.StatusOK)
+	c.JSON(http.StatusOK, response)
 }
 
-func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != http.MethodPost {
-		utils.RespondError(w, "Method not allowed", "", "", http.StatusMethodNotAllowed)
-	}
+func (h *UserHandler) Register(c *gin.Context) {
 
 	var req dto.RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondError(w, "Invalid request body", err.Error(), apperrors.ErrInvalidRequest, http.StatusBadRequest)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request body",
+		})
+		return
 	}
 
 	if err := h.service.Register(req); err != nil {
@@ -68,14 +68,20 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 			if appErr.Err != nil {
 				details = appErr.Err.Error()
 			}
-			utils.RespondError(w, appErr.Message, details, appErr.Code, http.StatusBadRequest)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   appErr.Message,
+				"details": details,
+			})
 			return
 		}
-		utils.RespondError(w, "Registration failed", err.Error(), "", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
-	utils.RespondJSON(w, map[string]string{
-		"message": "User regsitered succesfully",
-	}, http.StatusCreated)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Success",
+	})
 
 }
