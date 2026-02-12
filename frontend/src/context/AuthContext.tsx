@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = async (email: string, password: string) => {
         try {
-            const response = await api.post('/user/login', { email, password });
+            const response = await api.post('/v1/auth/user/login', { email, password });
             const { token, role } = response.data;
             const newUser: User = { email, role, token }; // Note: User interface might need Update
             setUser(newUser);

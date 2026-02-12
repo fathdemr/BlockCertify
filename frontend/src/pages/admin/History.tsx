@@ -82,14 +82,12 @@ const History: React.FC = () => {
                                     {new Date(log.createDate).toLocaleString()}
                                 </td>
                                 <td className="px-6 py-4">
-                                    <a
-                                        href={diplomaService.getDiplomaFile(log.diplomaId)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="p-2 bg-white/5 rounded-lg border border-white/5 opacity-80 hover:opacity-100 transition-opacity inline-flex"
+                                    <button
+                                        onClick={() => diplomaService.getDiplomaFile(log.diplomaId)}
+                                        className={"p-2 bg-white/5 rounded-lg border border-white/5 opacity-80 hover:opacity-100 transition-opacity inline-flex"}
                                     >
                                         <ExternalLink className="h-4 w-4 text-gray-500 hover:text-white" />
-                                    </a>
+                                    </button>
                                 </td>
                             </tr>
                         ))}

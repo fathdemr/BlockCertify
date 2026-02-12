@@ -7,6 +7,7 @@ import (
 	"BlockCertify/internal/logger"
 	"BlockCertify/internal/middleware"
 	"BlockCertify/internal/repositories"
+	"BlockCertify/internal/routes"
 	"BlockCertify/internal/security"
 	"BlockCertify/internal/services"
 	"log"
@@ -70,11 +71,17 @@ func main() {
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	r.POST("/api/upload-diploma", diplomaHandler.Upload)
-	r.POST("/api/verify-diploma", diplomaHandler.Verify)
-	r.POST("/api/user/login", userHandler.Login)
-	r.POST("/api/user/register", userHandler.Register)
-	r.GET("/api/diploma-records", AuthMiddleware.Authorize(), diplomaHandler.GetDiplomaRecords)
+	api := r.Group("/api")
+	v1 := api.Group("/v1")
+	auth := v1.Group("/auth")
+	diploma := v1.Group("/diploma")
+
+	//Public routes
+	routes.UserRoutes(auth, userHandler)
+
+	//Protected routes
+	diploma.Use(AuthMiddleware.Authorize())
+	routes.DiplomaRoutes(diploma, diplomaHandler)
 
 	r.Static("/public", "./public")
 	//Start server

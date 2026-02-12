@@ -39,7 +39,7 @@ api.interceptors.response.use(
 export const diplomaService = {
     upload: async (formData: FormData) => {
         try {
-            const response = await api.post('/upload-diploma', formData, {
+            const response = await api.post('/v1/diploma/upload', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -53,7 +53,7 @@ export const diplomaService = {
 
     verify: async (diplomaId: string) => {
         try {
-            const response = await api.post('/verify-diploma', { DiplomaID: diplomaId });
+            const response = await api.post('/v1/diploma/verify', { DiplomaID: diplomaId });
             return response.data;
         } catch (error) {
             console.error('Error verifying diploma:', error);
@@ -63,7 +63,7 @@ export const diplomaService = {
 
     getAllDiplomas: async () => {
         try{
-            const response = await api.get('/diploma-records');
+            const response = await api.get('/v1/diploma/records');
             return response.data;
         }catch (error) {
             console.error('Error retrieving diploma:', error);
@@ -71,10 +71,26 @@ export const diplomaService = {
         }
     },
 
-    getDiplomaFile: (diplomaId: string) => {
-        const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-        return `${baseURL}/diploma/${diplomaId}`;
-    },
+    getDiplomaFile: async (diplomaId: string) => {
+        try{
+            const response = await api.get(`v1/diploma/records/${diplomaId}`, {
+                responseType: 'blob',
+            });
+
+            const blob = new Blob([response.data], {type: 'application/pdf'});
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }catch (error: any) {
+            console.error("Diploma fetch error:", error);
+
+            if(error?.response?.status === 401) {
+                localStorage.removeItem('blockcertify_user');
+                window.location.href = '/login';
+                return;
+            }
+            alert("Diploma yüklenemedi veya bulunamadı.");
+        }
+    }
 };
 
 export default api;
