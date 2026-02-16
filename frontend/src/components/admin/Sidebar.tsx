@@ -6,7 +6,8 @@ import {
     History,
     LogOut,
     LayoutDashboard,
-    Shield
+    Shield,
+    Wallet
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,6 +25,7 @@ const Sidebar: React.FC = () => {
         { icon: Upload, label: 'Upload Diploma', href: '/admin/upload' },
         { icon: ShieldCheck, label: 'Verify Diploma', href: '/admin/verify' },
         { icon: History, label: 'History / Logs', href: '/admin/history' },
+        { icon: Wallet, label: 'Wallets', href: '/admin/wallets' },
     ];
 
     return (

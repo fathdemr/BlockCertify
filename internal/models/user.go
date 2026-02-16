@@ -16,6 +16,7 @@ type User struct {
 	Password    string
 	Institution string
 	Role        string `json:"role"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Wallet
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

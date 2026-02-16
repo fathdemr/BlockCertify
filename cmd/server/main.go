@@ -67,14 +67,17 @@ func main() {
 	diplomaService := services.NewDiplomaService(arweaveService, blockchainService, diplomaRepo)
 	userService := services.NewUserService(userRepo, tokenHelper)
 	AuthMiddleware := middleware.NewAuthMiddleware(tokenHelper, userRepo)
+	walletService := services.NewWalletService()
 
 	//Initialize handlers
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
 	userHandler := handlers.NewUserHandler(userService)
+	walletHandler := handlers.NewWalletHandler(walletService)
 
 	api := r.Group("/api/v1")
 	auth := api.Group("/auth")
 	diploma := api.Group("/diploma")
+	wallet := api.Group("/wallet")
 
 	//Public routes
 	routes.UserRoutes(auth, userHandler)
@@ -83,6 +86,7 @@ func main() {
 	//Protected routes
 	diploma.Use(AuthMiddleware.Authorize())
 	routes.DiplomaRoutes(diploma, diplomaHandler)
+	routes.WalletRoutes(wallet, walletHandler)
 
 	r.Static("/public", "./public")
 	//Start server

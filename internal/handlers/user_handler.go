@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"BlockCertify/internal/dto"
+	"BlockCertify/internal/helper"
 	"BlockCertify/internal/services"
 	"net/http"
+	"time"
 
 	apperrors "BlockCertify/pkg/errors"
 
@@ -47,6 +49,9 @@ func (h *UserHandler) Login(c *gin.Context) {
 		})
 		return
 	}
+
+	helper.SetCookie(c, "jwt", response.Token, time.Now().Add(time.Hour*1))
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -96,4 +101,11 @@ func (h *UserHandler) GetUniversities(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, universities)
+}
+
+func (h *UserHandler) Logout(c *gin.Context) {
+	helper.ClearCookie(c, "jwt")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Logged out successfully",
+	})
 }

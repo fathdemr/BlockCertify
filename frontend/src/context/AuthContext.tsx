@@ -55,9 +55,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem('blockcertify_user');
+    const logout = async () => {
+        try {
+            await api.post('/v1/auth/user/logout');
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            setUser(null);
+            localStorage.removeItem('blockcertify_user');
+            window.location.href = '/login';
+        }
     };
 
     return (

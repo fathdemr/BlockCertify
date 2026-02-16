@@ -15,6 +15,7 @@ import Dashboard from './pages/admin/Dashboard';
 import Upload from './pages/admin/Upload';
 import AdminVerify from './pages/admin/Verify';
 import History from './pages/admin/History';
+import Wallets from './pages/admin/Wallets';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
                 <Route path="upload" element={<Upload />} />
                 <Route path="verify" element={<AdminVerify />} />
                 <Route path="history" element={<History />} />
+                <Route path="wallets" element={<Wallets />} />
               </Route>
             </Routes>
           </main>
