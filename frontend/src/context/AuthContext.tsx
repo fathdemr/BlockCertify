@@ -12,6 +12,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     login: (email: string, password: string) => Promise<void>;
+    register: (data: { firstName: string; lastName: string; email: string; institution: string; password: string }) => Promise<void>;
     logout: () => void;
     isAuthenticated: boolean;
     isAdmin: boolean;
@@ -45,6 +46,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const register = async (data: { firstName: string; lastName: string; email: string; institution: string; password: string }) => {
+        try {
+            await api.post('/v1/auth/user/register', data);
+        } catch (error: any) {
+            const message = error.response?.data?.error || error.response?.data?.message || 'Registration failed';
+            throw new Error(message);
+        }
+    };
+
     const logout = () => {
         setUser(null);
         localStorage.removeItem('blockcertify_user');
@@ -55,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             value={{
                 user,
                 login,
+                register,
                 logout,
                 isAuthenticated: !!user,
                 isAdmin: user?.role === 'admin',

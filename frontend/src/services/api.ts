@@ -24,15 +24,11 @@ api.interceptors.response.use(
     (error) => {
         if (error?.response?.status === 401) {
             console.warn("Session expired -> redirecting to login");
-
             alert("Oturumunuz zaman aşımına uğradı. Tekrar giriş yapın.")
-
             localStorage.removeItem('blockcertify_user');
-
             window.location.href = '/login';
-
-            return Promise.reject(error);
         }
+        return Promise.reject(error);
     }
 )
 
@@ -62,28 +58,28 @@ export const diplomaService = {
     },
 
     getAllDiplomas: async () => {
-        try{
+        try {
             const response = await api.get('/v1/diploma/records');
             return response.data;
-        }catch (error) {
+        } catch (error) {
             console.error('Error retrieving diploma:', error);
             throw error;
         }
     },
 
     getDiplomaFile: async (diplomaId: string) => {
-        try{
+        try {
             const response = await api.get(`v1/diploma/records/${diplomaId}`, {
                 responseType: 'blob',
             });
 
-            const blob = new Blob([response.data], {type: 'application/pdf'});
+            const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             window.open(url, '_blank');
-        }catch (error: any) {
+        } catch (error: any) {
             console.error("Diploma fetch error:", error);
 
-            if(error?.response?.status === 401) {
+            if (error?.response?.status === 401) {
                 localStorage.removeItem('blockcertify_user');
                 window.location.href = '/login';
                 return;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Shield, Lock, User, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -89,10 +89,17 @@ const Login: React.FC = () => {
                         {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Sign In'}
                     </button>
                 </form>
+                
 
-                <p className="mt-8 text-center text-xs text-gray-500">
-                    Tip: Use <span className="text-gray-300 font-mono">admin</span> as username for testing.
-                </p>
+                <div className="mt-8 pt-6 border-t border-white/10 text-center">
+                    <p className="text-gray-400 text-sm mb-4">New institution?</p>
+                    <Link
+                        to="/register"
+                        className="inline-flex items-center justify-center w-full py-3 px-4 border border-white/10 rounded-xl text-sm font-medium text-white hover:bg-white/5 transition-all"
+                    >
+                        Register your institution
+                    </Link>
+                </div>
             </motion.div>
         </div>
     );

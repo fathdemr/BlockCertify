@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Verify from './pages/Verify';
 import About from './pages/About';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import AdminLayout from './layouts/AdminLayout';
 
 // Admin Pages
@@ -28,6 +29,7 @@ function App() {
               <Route path="/verify" element={<Verify />} />
               <Route path="/about" element={<About />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
               {/* Protected Admin Routes */}
               <Route

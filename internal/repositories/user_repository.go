@@ -1,7 +1,9 @@
 package repositories
 
 import (
+	"BlockCertify/internal/dto"
 	"BlockCertify/internal/models"
+	"log/slog"
 
 	"gorm.io/gorm"
 )
@@ -10,6 +12,7 @@ type UserRepository interface {
 	FindByEmail(email string) (*models.User, error)
 	Exists(email string) (bool, error)
 	Create(user *models.User) error
+	GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error)
 }
 
 type userRepository struct {
@@ -48,4 +51,21 @@ func (r *userRepository) Exists(email string) (bool, error) {
 
 func (r *userRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
+}
+
+func (r *userRepository) GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error) {
+
+	var response []dto.UniversitiesResponse
+
+	err := r.db.
+		Model(&models.Universities{}).
+		Select("id, name").
+		Scan(&response).Error
+
+	if err != nil {
+		slog.Error("failed to fetch universities", "err", err)
+		return nil, err
+	}
+
+	return response, nil
 }

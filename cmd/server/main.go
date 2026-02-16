@@ -54,7 +54,8 @@ func main() {
 
 	tokenHelper := security.NewJWTHelper(
 		cfg.JWTConfig.JWTSecret,
-		cfg.JWTConfig.JWTExpireHours)
+		cfg.JWTConfig.JWTExpireHours,
+	)
 
 	//Mock Services
 	//arweaveService := services.NewMockArweaveService("DEBUG_FAKE_ARWEAVE_TX")
@@ -71,13 +72,13 @@ func main() {
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	api := r.Group("/api")
-	v1 := api.Group("/v1")
-	auth := v1.Group("/auth")
-	diploma := v1.Group("/diploma")
+	api := r.Group("/api/v1")
+	auth := api.Group("/auth")
+	diploma := api.Group("/diploma")
 
 	//Public routes
 	routes.UserRoutes(auth, userHandler)
+	routes.UniversityRoutes(api, userHandler)
 
 	//Protected routes
 	diploma.Use(AuthMiddleware.Authorize())

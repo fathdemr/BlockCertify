@@ -8,6 +8,7 @@ import (
 	"BlockCertify/internal/security"
 	apperrors "BlockCertify/pkg/errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 )
@@ -15,6 +16,7 @@ import (
 type UserService interface {
 	Register(req dto.RegisterRequest) error
 	Login(req dto.LoginRequest) (*dto.LoginResponse, error)
+	GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error)
 }
 
 type userService struct {
@@ -90,4 +92,14 @@ func (s *userService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 		ExpiresIn: s.tokenHelper.ExpiresInSeconds(),
 		Role:      role,
 	}, nil
+}
+
+func (s *userService) GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error) {
+
+	universities, err := s.repo.GetUniversitiesFromDBRecord()
+	if err != nil {
+		slog.Error("Failed to get universities from DB: %v", err)
+		return nil, err
+	}
+	return universities, nil
 }

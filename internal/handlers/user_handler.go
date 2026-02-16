@@ -85,3 +85,15 @@ func (h *UserHandler) Register(c *gin.Context) {
 	})
 
 }
+
+func (h *UserHandler) GetUniversities(c *gin.Context) {
+
+	universities, err := h.service.GetUniversitiesFromDBRecord()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, universities)
+}
