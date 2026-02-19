@@ -10,25 +10,26 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type UserService interface {
 	Register(req dto.RegisterRequest) error
 	Login(req dto.LoginRequest) (*dto.LoginResponse, error)
-	GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error)
 }
 
 type userService struct {
 	repo        repositories.UserRepository
 	tokenHelper security.TokenHelper
+	repoUni     repositories.UniversityRepository
 }
 
-func NewUserService(repo repositories.UserRepository, tokenHelper security.TokenHelper) UserService {
+func NewUserService(repo repositories.UserRepository, tokenHelper security.TokenHelper, repoUni repositories.UniversityRepository) UserService {
 
 	return &userService{
 		repo:        repo,
 		tokenHelper: tokenHelper,
+		repoUni:     repoUni,
 	}
 }
 
@@ -39,8 +40,12 @@ func (s *userService) Register(req dto.RegisterRequest) error {
 	}
 
 	existing, err := s.repo.Exists(req.Email)
-	if err == nil && existing {
-		return apperrors.New(apperrors.ErrUserExists, "User already exists", nil)
+	if err != nil {
+		slog.Error(err.Error())
+		return err
+	}
+	if existing {
+		return apperrors.New(apperrors.ErrUserExists, "User with this email already exists", nil)
 	}
 
 	hashedPassword, err := helper.HashPassword(req.Password)
@@ -48,16 +53,41 @@ func (s *userService) Register(req dto.RegisterRequest) error {
 		return fmt.Errorf("Failed to hash password: %w", err)
 	}
 
-	user := models.User{
-		ID:          uuid.NewString(),
-		FirstName:   req.FirstName,
-		LastName:    req.LastName,
-		Email:       req.Email,
-		Password:    hashedPassword,
-		Institution: req.Institution,
+	uni, err := s.repoUni.GetUniversityByID(req.UniversityID)
+	if err != nil {
+		slog.Error("Failed to get university by ID: %v", err)
+		return apperrors.New(apperrors.ErrUniversityNotFound, "University not found", err)
 	}
 
-	return s.repo.Create(&user)
+	tx := s.repo.CreateTransaction()
+	defer tx.Rollback()
+
+	user := models.User{
+		ID:        uuid.Must(uuid.NewV7()),
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Email:     req.Email,
+		Password:  hashedPassword,
+		Role:      models.RoleAdmin,
+	}
+
+	if err := tx.Create(&user).Error; err != nil {
+		slog.Error("Failed to create user: %v", err)
+		return apperrors.New(apperrors.ErrUserCreationFailed, "User creation failed", err)
+	}
+
+	admin := models.Admin{
+		ID:           uuid.Must(uuid.NewV7()),
+		UserID:       user.ID,
+		UniversityID: uni.ID,
+	}
+
+	if err := tx.Create(&admin).Error; err != nil {
+		slog.Error("Failed to create admin: %v", err)
+		return apperrors.New(apperrors.ErrAdminCreationFailed, "Admin creation failed", err)
+	}
+
+	return tx.Commit().Error
 }
 
 func (s *userService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
@@ -90,16 +120,6 @@ func (s *userService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 		Token:     token,
 		TokenType: "Bearer",
 		ExpiresIn: s.tokenHelper.ExpiresInSeconds(),
-		Role:      role,
+		Role:      "admin",
 	}, nil
-}
-
-func (s *userService) GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error) {
-
-	universities, err := s.repo.GetUniversitiesFromDBRecord()
-	if err != nil {
-		slog.Error("Failed to get universities from DB: %v", err)
-		return nil, err
-	}
-	return universities, nil
 }

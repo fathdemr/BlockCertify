@@ -22,6 +22,9 @@ var (
 	ErrTokenCreateFailed   = "TOKEN_CREATE_FAILED"
 	ErrInvalidToken        = "INVALID_TOKEN"
 	ErrInvalidRequest      = "INVALID_REQUEST"
+	ErrUniversityNotFound  = "UNIVERSITY_NOT_FOUND"
+	ErrUserCreationFailed  = "USER_CREATION_FAILED"
+	ErrAdminCreationFailed = "ADMIN_CREATION_FAILED"
 )
 
 func New(code, message string, err error) *AppError {

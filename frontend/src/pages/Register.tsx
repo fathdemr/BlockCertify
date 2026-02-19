@@ -15,7 +15,7 @@ const Register: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
-        institution: '',
+        universityID: '',
         password: '',
         confirmPassword: ''
     });
@@ -23,6 +23,7 @@ const Register: React.FC = () => {
     const [fetchingUniversities, setFetchingUniversities] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [selectedUniversityName, setSelectedUniversityName] = useState('');
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -194,8 +195,8 @@ const Register: React.FC = () => {
                                 className={`w-full pl-12 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between cursor-pointer hover:border-brand-primary/50 transition-all ${isDropdownOpen ? 'ring-2 ring-brand-primary/50 border-brand-primary' : ''}`}
                             >
                                 <School className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                                <span className={formData.institution ? 'text-white' : 'text-gray-500'}>
-                                    {fetchingUniversities ? 'Loading universities...' : (formData.institution || 'Select your university')}
+                                <span className={formData.universityID ? 'text-white' : 'text-gray-500'}>
+                                    {fetchingUniversities ? 'Loading universities...' : (selectedUniversityName || 'Select your university')}
                                 </span>
                                 <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
@@ -225,14 +226,15 @@ const Register: React.FC = () => {
                                                 <div
                                                     key={u.id}
                                                     onClick={() => {
-                                                        setFormData({ ...formData, institution: u.name });
+                                                        setFormData({ ...formData, universityID: u.id });
+                                                        setSelectedUniversityName(u.name);
                                                         setIsDropdownOpen(false);
                                                         setSearchTerm('');
                                                     }}
                                                     className="px-4 py-3 hover:bg-white/5 cursor-pointer flex items-center justify-between group transition-colors"
                                                 >
                                                     <span className="text-sm text-gray-300 group-hover:text-white">{u.name}</span>
-                                                    {formData.institution === u.name && (
+                                                    {formData.universityID === u.id && (
                                                         <Check className="h-4 w-4 text-brand-primary" />
                                                     )}
                                                 </div>

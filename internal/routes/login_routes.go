@@ -10,7 +10,7 @@ func UserRoutes(api *gin.RouterGroup, h *handlers.UserHandler) {
 	user := api.Group("/user")
 	{
 		user.POST("/login", h.Login)
-		user.POST("/register", h.Register)
+		user.POST("/register/admin", h.RegisterAdmin)
 		user.POST("/logout", h.Logout)
 	}
 }

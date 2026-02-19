@@ -24,6 +24,11 @@ func TestAutoMigrate(t *testing.T) {
 		&models.User{},
 		&models.DiplomaMetaData{},
 		&models.Diploma{},
+		&models.Universities{},
+		&models.Faculties{},
+		&models.Department{},
+		&models.Admin{},
+		&models.Student{},
 	)
 
 	if err != nil {

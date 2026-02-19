@@ -13,12 +13,14 @@ import (
 )
 
 type UserHandler struct {
-	service services.UserService
+	service    services.UserService
+	uniService services.UniversityService
 }
 
-func NewUserHandler(service services.UserService) *UserHandler {
+func NewUserHandler(service services.UserService, uniService services.UniversityService) *UserHandler {
 	return &UserHandler{
-		service: service,
+		service:    service,
+		uniService: uniService,
 	}
 }
 
@@ -54,8 +56,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
-
-func (h *UserHandler) Register(c *gin.Context) {
+func (h *UserHandler) RegisterAdmin(c *gin.Context) {
 
 	var req dto.RegisterRequest
 
@@ -93,7 +94,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 
 func (h *UserHandler) GetUniversities(c *gin.Context) {
 
-	universities, err := h.service.GetUniversitiesFromDBRecord()
+	universities, err := h.uniService.GetUniversitiesFromDBRecord()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),

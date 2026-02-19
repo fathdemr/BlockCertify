@@ -51,6 +51,7 @@ func main() {
 
 	userRepo := repositories.NewUserRepository(db)
 	diplomaRepo := repositories.NewDiplomaRepository(db)
+	uniRepo := repositories.NewUniversityRepository(db)
 
 	tokenHelper := security.NewJWTHelper(
 		cfg.JWTConfig.JWTSecret,
@@ -65,13 +66,14 @@ func main() {
 	arweaveService := services.NewArweaveService(cfg)
 	blockchainService := services.NewBlockChainService(cfg, contractRepo)
 	diplomaService := services.NewDiplomaService(arweaveService, blockchainService, diplomaRepo)
-	userService := services.NewUserService(userRepo, tokenHelper)
+	userService := services.NewUserService(userRepo, tokenHelper, uniRepo)
 	AuthMiddleware := middleware.NewAuthMiddleware(tokenHelper, userRepo)
+	uniService := services.NewUniversityService(uniRepo)
 	walletService := services.NewWalletService()
 
 	//Initialize handlers
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
-	userHandler := handlers.NewUserHandler(userService)
+	userHandler := handlers.NewUserHandler(userService, uniService)
 	walletHandler := handlers.NewWalletHandler(walletService)
 
 	api := r.Group("/api/v1")
