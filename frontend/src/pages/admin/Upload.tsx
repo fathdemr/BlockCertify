@@ -13,11 +13,23 @@ import {
     ArrowRight,
     Loader2,
     X,
-    Globe
+    Globe,
+    Wallet
 } from 'lucide-react';
 import { diplomaService } from '../../services/api';
+import { storeDiplomaWithMetaMask } from '../../services/blockchain';
 
-type UploadStep = 'form' | 'hashing' | 'arweave' | 'polygon' | 'success';
+// Polygon Amoy testnet chain ID (hex)
+const AMOY_CHAIN_ID = '0x13882';
+const AMOY_CHAIN_PARAMS = {
+    chainId: AMOY_CHAIN_ID,
+    chainName: 'Polygon Amoy Testnet',
+    nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+    rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+    blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+};
+
+type UploadStep = 'form' | 'hashing' | 'arweave' | 'metamask' | 'polygon' | 'success';
 
 interface DiplomaMetaData {
     firstName: string;
@@ -61,24 +73,58 @@ const UploadDiploma: React.FC = () => {
     const startUpload = (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.file) return;
-
-        // Start logical process
         processFlow();
+    };
+
+    /**
+     * Ensures MetaMask is connected and switched to Polygon Amoy.
+     * Returns the connected account address.
+     */
+    const ensurePolygonAmoy = async (): Promise<string> => {
+        if (!window.ethereum) {
+            throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
+        }
+
+        // Request account access
+        const accounts: string[] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (!accounts || accounts.length === 0) {
+            throw new Error('No MetaMask account selected. Please unlock MetaMask.');
+        }
+
+        // Check current chain and switch if necessary
+        const currentChainId: string = await window.ethereum.request({ method: 'eth_chainId' });
+        if (currentChainId !== AMOY_CHAIN_ID) {
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: AMOY_CHAIN_ID }],
+                });
+            } catch (switchError: any) {
+                // Chain not added to MetaMask yet — add it
+                if (switchError.code === 4902) {
+                    await window.ethereum.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [AMOY_CHAIN_PARAMS],
+                    });
+                } else {
+                    throw switchError;
+                }
+            }
+        }
+
+        return accounts[0];
     };
 
     const processFlow = async () => {
         if (!formData.file) return;
 
         try {
+            // ── Step 1: Hashing (UI only, the real hash is computed server-side) ──
             setStep('hashing');
-            // Logical split: we call the backend once, but update the UI to show progress
-            // Mocking the intermediate steps for UI smoothness if the backend is too fast
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 600));
 
+            // ── Step 2: Arweave upload (backend) ──
             setStep('arweave');
-            await new Promise(r => setTimeout(r, 800));
-
-            setStep('polygon');
 
             const uploadFormData = new FormData();
             uploadFormData.append('diploma', formData.file);
@@ -92,18 +138,55 @@ const UploadDiploma: React.FC = () => {
             uploadFormData.append('studentNumber', formData.studentNumber);
             uploadFormData.append('nationality', formData.nationality);
 
-            const response = await diplomaService.upload(uploadFormData);
+            const prepared = await diplomaService.prepare(uploadFormData);
+
+            // ── Step 3: MetaMask — switch to Polygon Amoy & sign ──
+            setStep('metamask');
+            await ensurePolygonAmoy();
+
+            const { txHash, blockNumber } = await storeDiplomaWithMetaMask(
+                prepared.diplomaHash,
+                prepared.arweaveTxID
+            );
+
+            // ── Step 4: Polygon confirming (tx already submitted, just UX feedback) ──
+            setStep('polygon');
+            await new Promise(r => setTimeout(r, 600));
+
+            // ── Step 5: Confirm with backend (save to DB) ──
+            await diplomaService.confirm({
+                diplomaHash: prepared.diplomaHash,
+                arweaveTxID: prepared.arweaveTxID,
+                polygonTxHash: txHash,
+                blockNumber: blockNumber,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                email: formData.email,
+                university: formData.university,
+                faculty: formData.faculty,
+                department: formData.department,
+                graduationYear: formData.graduationYear,
+                studentNumber: formData.studentNumber,
+                nationality: formData.nationality,
+            });
 
             setTxData({
-                arweaveTx: response.arweaveTxID,
-                polygonTx: response.polygonTxHash,
-                fileHash: response.diplomaHash,
+                arweaveTx: prepared.arweaveTxID,
+                polygonTx: txHash,
+                fileHash: prepared.diplomaHash,
             });
 
             setStep('success');
         } catch (error: any) {
             console.error('Upload failed:', error);
-            alert(error.response?.data?.message || 'Upload failed. Please check the backend connection.');
+
+            // MetaMask user rejection
+            if (error?.code === 4001 || error?.message?.includes('rejected')) {
+                alert('Transaction rejected in MetaMask. Please try again and approve the transaction.');
+            } else {
+                alert(error.response?.data?.error || error.message || 'Upload failed. Please check the connection and try again.');
+            }
+
             setStep('form');
         }
     };
@@ -114,7 +197,7 @@ const UploadDiploma: React.FC = () => {
             firstName: '',
             lastName: '',
             email: '',
-            university: 'Global Tech University',
+            university: 'Karabuk University',
             faculty: '',
             department: '',
             graduationYear: 2025,
@@ -124,11 +207,28 @@ const UploadDiploma: React.FC = () => {
         });
     };
 
+    const processingSteps = [
+        { id: 'hashing', label: 'File Hashing', icon: Cpu },
+        { id: 'arweave', label: 'Arweave Storage', icon: Database },
+        { id: 'metamask', label: 'MetaMask Signing', icon: Wallet },
+        { id: 'polygon', label: 'Polygon Confirmation', icon: ShieldCheck },
+    ];
+
+    const stepOrder: UploadStep[] = ['hashing', 'arweave', 'metamask', 'polygon', 'success'];
+
+    const getStepStatus = (stepId: string) => {
+        const currentIdx = stepOrder.indexOf(step as UploadStep);
+        const thisIdx = stepOrder.indexOf(stepId as UploadStep);
+        if (thisIdx < currentIdx) return 'done';
+        if (thisIdx === currentIdx) return 'active';
+        return 'pending';
+    };
+
     return (
         <div className="max-w-4xl mx-auto">
             <div className="mb-8">
                 <h1 className="text-3xl font-display font-bold mb-2">Issue New Diploma</h1>
-                <p className="text-gray-400">Upload a PDF and register its integrity on the blockchain.</p>
+                <p className="text-gray-400">Upload a PDF and register its integrity on the blockchain via your MetaMask wallet.</p>
             </div>
 
             <AnimatePresence mode="wait">
@@ -316,6 +416,15 @@ const UploadDiploma: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* MetaMask notice */}
+                        <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                            <Wallet className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-300">
+                                MetaMask required — after the file is uploaded to Arweave, you'll be prompted to sign the
+                                Polygon transaction. Make sure MetaMask is installed and unlock it before proceeding.
+                            </p>
+                        </div>
+
                         <button
                             type="submit"
                             className="w-full py-5 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_10px_30px_rgba(59,130,246,0.3)]"
@@ -326,7 +435,7 @@ const UploadDiploma: React.FC = () => {
                     </motion.form>
                 )}
 
-                {(step === 'hashing' || step === 'arweave' || step === 'polygon') && (
+                {(step === 'hashing' || step === 'arweave' || step === 'metamask' || step === 'polygon') && (
                     <motion.div
                         key="processing"
                         initial={{ opacity: 0 }}
@@ -335,31 +444,58 @@ const UploadDiploma: React.FC = () => {
                         className="p-12 rounded-3xl bg-white/5 border border-white/10 text-center"
                     >
                         <div className="relative w-24 h-24 mx-auto mb-8">
-                            <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-2xl animate-pulse" />
-                            <Loader2 className="w-24 h-24 text-brand-primary animate-spin" />
+                            <div className={`absolute inset-0 rounded-full blur-2xl animate-pulse ${step === 'metamask' ? 'bg-amber-500/20' : 'bg-brand-primary/20'}`} />
+                            {step === 'metamask' ? (
+                                <Wallet className="w-24 h-24 text-amber-400" />
+                            ) : (
+                                <Loader2 className="w-24 h-24 text-brand-primary animate-spin" />
+                            )}
                         </div>
 
-                        <h2 className="text-2xl font-display font-bold mb-8 capitalize">{step.replace('hashing', 'Generating Fingerprint').replace('arweave', 'Storing on Permaweb').replace('polygon', 'Registering on Polygon')}...</h2>
+                        <h2 className="text-2xl font-display font-bold mb-2">
+                            {step === 'hashing' && 'Generating Fingerprint...'}
+                            {step === 'arweave' && 'Storing on Permaweb...'}
+                            {step === 'metamask' && 'Waiting for MetaMask'}
+                            {step === 'polygon' && 'Confirming on Polygon...'}
+                        </h2>
+                        {step === 'metamask' && (
+                            <p className="text-amber-300/80 text-sm mb-8">
+                                A MetaMask popup should have appeared. Please review and approve the transaction.
+                            </p>
+                        )}
 
-                        <div className="max-w-md mx-auto space-y-4">
-                            {[
-                                { id: 'hashing', label: 'File Hashing', icon: Cpu, active: step === 'hashing', done: step !== 'hashing' },
-                                { id: 'arweave', label: 'Arweave Storage', icon: Database, active: step === 'arweave', done: step === 'polygon' },
-                                { id: 'polygon', label: 'Polygon Registration', icon: ShieldCheck, active: step === 'polygon', done: false },
-                            ].map((item, i) => (
-                                <div
-                                    key={i}
-                                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${item.active ? 'bg-brand-primary/10 border-brand-primary/30' :
-                                        item.done ? 'bg-brand-success/10 border-brand-success/30 opacity-60' :
-                                            'bg-white/5 border-white/5 opacity-40'
-                                        }`}
-                                >
-                                    <item.icon className={`h-6 w-6 ${item.active ? 'text-brand-primary' : item.done ? 'text-brand-success' : 'text-gray-500'}`} />
-                                    <span className={`font-medium ${item.active ? 'text-white' : 'text-gray-400'}`}>{item.label}</span>
-                                    {item.done && <CheckCircle2 className="h-5 w-5 text-brand-success ml-auto" />}
-                                    {item.active && <Loader2 className="h-5 w-5 text-brand-primary animate-spin ml-auto" />}
-                                </div>
-                            ))}
+                        <div className="max-w-md mx-auto space-y-4 mt-8">
+                            {processingSteps.map((item) => {
+                                const status = getStepStatus(item.id);
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${status === 'active'
+                                            ? item.id === 'metamask'
+                                                ? 'bg-amber-500/10 border-amber-500/30'
+                                                : 'bg-brand-primary/10 border-brand-primary/30'
+                                            : status === 'done'
+                                                ? 'bg-brand-success/10 border-brand-success/30 opacity-60'
+                                                : 'bg-white/5 border-white/5 opacity-40'
+                                            }`}
+                                    >
+                                        <item.icon className={`h-6 w-6 ${status === 'active'
+                                            ? item.id === 'metamask' ? 'text-amber-400' : 'text-brand-primary'
+                                            : status === 'done' ? 'text-brand-success' : 'text-gray-500'
+                                            }`} />
+                                        <span className={`font-medium ${status === 'active' ? 'text-white' : 'text-gray-400'}`}>
+                                            {item.label}
+                                        </span>
+                                        {status === 'done' && <CheckCircle2 className="h-5 w-5 text-brand-success ml-auto" />}
+                                        {status === 'active' && item.id !== 'metamask' && (
+                                            <Loader2 className="h-5 w-5 text-brand-primary animate-spin ml-auto" />
+                                        )}
+                                        {status === 'active' && item.id === 'metamask' && (
+                                            <div className="ml-auto w-2.5 h-2.5 bg-amber-400 rounded-full animate-pulse" />
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </motion.div>
                 )}
@@ -387,8 +523,15 @@ const UploadDiploma: React.FC = () => {
                                 <code className="text-sm text-brand-accent break-all">{txData.arweaveTx}</code>
                             </div>
                             <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                                <p className="text-xs text-gray-500 uppercase mb-1">Polygon Transaction</p>
-                                <code className="text-sm text-brand-primary break-all">{txData.polygonTx}</code>
+                                <p className="text-xs text-gray-500 uppercase mb-1">Polygon Transaction (signed by MetaMask)</p>
+                                <a
+                                    href={`https://amoy.polygonscan.com/tx/${txData.polygonTx}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-brand-primary break-all hover:underline"
+                                >
+                                    {txData.polygonTx}
+                                </a>
                             </div>
                         </div>
 

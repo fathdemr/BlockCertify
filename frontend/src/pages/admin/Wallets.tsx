@@ -1,26 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Wallet,
-    Key,
     FileJson,
     Shield,
-    Eye,
-    EyeOff,
     CheckCircle2,
     AlertCircle,
     Copy,
     ExternalLink
 } from 'lucide-react';
+import { ethers } from 'ethers';
 import { motion } from 'framer-motion';
 import api from '../../services/api';
 
+declare global {
+    interface Window {
+        ethereum?: any;
+    }
+}
+
 const Wallets: React.FC = () => {
     const [arweaveWallet, setArweaveWallet] = useState<{ name: string; address: string; balance: string } | null>(null);
-    const [polygonKey, setPolygonKey] = useState('');
-    const [showPolygonKey, setShowPolygonKey] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [polygonAddress, setPolygonAddress] = useState<string | null>(null);
+    const [isMetaMaskConnecting, setIsMetaMaskConnecting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+
+    // Load persisted wallets on mount
+    useEffect(() => {
+        const savedArweave = localStorage.getItem('blockcertify_arweave_wallet');
+        const savedPolygon = localStorage.getItem('blockcertify_polygon_address');
+
+        if (savedArweave) {
+            try {
+                setArweaveWallet(JSON.parse(savedArweave));
+            } catch (e) {
+                console.error('Failed to parse saved Arweave wallet', e);
+                localStorage.removeItem('blockcertify_arweave_wallet');
+            }
+        }
+
+        if (savedPolygon) {
+            setPolygonAddress(savedPolygon);
+        }
+    }, []);
 
     const handleArweaveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -42,11 +64,13 @@ const Wallets: React.FC = () => {
                 });
 
                 if (response.data) {
-                    setArweaveWallet({
+                    const walletData = {
                         name: file.name,
                         address: response.data.address,
                         balance: response.data.balance || '0'
-                    });
+                    };
+                    setArweaveWallet(walletData);
+                    localStorage.setItem('blockcertify_arweave_wallet', JSON.stringify(walletData));
                     setSuccessMessage('Arweave wallet connected successfully!');
                     setTimeout(() => setSuccessMessage(''), 3000);
                 }
@@ -59,14 +83,61 @@ const Wallets: React.FC = () => {
         }
     };
 
-    const handleSave = () => {
-        setIsSaving(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsSaving(false);
-            setSuccessMessage('Wallet configuration updated successfully!');
+    const connectMetaMask = async () => {
+        if (!window.ethereum) {
+            alert('MetaMask is not installed.');
+            return;
+        }
+
+        setIsMetaMaskConnecting(true);
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+
+            // Request accounts
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+            const address = await signer.getAddress();
+
+            // Ensure user is on Polygon Amoy (chainId 80002)
+            const network = await provider.getNetwork();
+            if (network.chainId !== 80002n) {
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x13882' }], // 80002 in hex
+                    });
+                } catch (switchError: any) {
+                    // Chain not added yet — add it
+                    if (switchError.code === 4902) {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: '0x13882',
+                                chainName: 'Polygon Amoy Testnet',
+                                nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+                                rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+                                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+                            }],
+                        });
+                    } else {
+                        throw switchError;
+                    }
+                }
+            }
+
+            setPolygonAddress(address);
+            localStorage.setItem('blockcertify_polygon_address', address);
+            setSuccessMessage('Polygon wallet connected!');
             setTimeout(() => setSuccessMessage(''), 3000);
-        }, 1500);
+        } catch (error: any) {
+            if (error.code === 4001) {
+                alert('Connection rejected.');
+            } else {
+                alert('Failed to connect MetaMask.');
+            }
+        } finally {
+            setIsMetaMaskConnecting(false);
+        }
     };
 
     return (
@@ -144,7 +215,10 @@ const Wallets: React.FC = () => {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => setArweaveWallet(null)}
+                                        onClick={() => {
+                                            setArweaveWallet(null);
+                                            localStorage.removeItem('blockcertify_arweave_wallet');
+                                        }}
                                         className="text-xs text-gray-500 hover:text-red-400 transition-colors"
                                     >
                                         Change
@@ -177,60 +251,94 @@ const Wallets: React.FC = () => {
                     </div>
 
                     <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block ml-1">
-                                Private Key
-                            </label>
-                            <div className="relative group/input">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-500">
-                                    <Key className="h-5 w-5" />
+                        {!polygonAddress ? (
+                            <div className="space-y-4">
+                                <div className="p-6 border-2 border-dashed border-white/10 rounded-2xl bg-white/5 text-center">
+                                    <div className="p-3 rounded-full bg-white/5 text-gray-400 w-fit mx-auto mb-3">
+                                        <Wallet className="h-6 w-6" />
+                                    </div>
+                                    <p className="text-white font-medium mb-1">MetaMask Connection</p>
+                                    <p className="text-xs text-gray-500">Connect your wallet for on-chain verification</p>
                                 </div>
-                                <input
-                                    type={showPolygonKey ? 'text' : 'password'}
-                                    value={polygonKey}
-                                    onChange={(e) => setPolygonKey(e.target.value)}
-                                    placeholder="Enter your Polygon private key"
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/50 transition-all"
-                                />
                                 <button
-                                    type="button"
-                                    onClick={() => setShowPolygonKey(!showPolygonKey)}
-                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white transition-colors"
+                                    onClick={connectMetaMask}
+                                    disabled={isMetaMaskConnecting}
+                                    className="w-full bg-brand-primary hover:bg-brand-primary/90 text-white py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(59,130,246,0.1)]"
                                 >
-                                    {showPolygonKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                    {isMetaMaskConnecting ? (
+                                        <>
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                            >
+                                                <AlertCircle className="h-5 w-5" />
+                                            </motion.div>
+                                            Connecting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Wallet className="h-5 w-5" />
+                                            Connect MetaMask
+                                        </>
+                                    )}
                                 </button>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="p-6 border border-brand-primary/30 rounded-2xl bg-brand-primary/5 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 rounded-lg bg-brand-primary/20 text-brand-primary">
+                                            <CheckCircle2 className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-white text-sm font-medium">Verified Wallet</p>
+                                            <p className="text-xs text-gray-500 font-mono mt-1">
+                                                {polygonAddress.slice(0, 6)}...{polygonAddress.slice(-4)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setPolygonAddress(null);
+                                            localStorage.removeItem('blockcertify_polygon_address');
+                                        }}
+                                        className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                                    >
+                                        Disconnect
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-between text-xs p-4 bg-white/5 rounded-2xl border border-white/10 font-mono text-gray-400">
+                                    <div className="flex gap-4 w-full justify-between">
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(polygonAddress);
+                                                alert('Address copied to clipboard!');
+                                            }}
+                                            className="hover:text-white flex items-center gap-1 transition-colors"
+                                        >
+                                            <Copy className="h-3 w-3" /> Copy Address
+                                        </button>
+                                        <a
+                                            href={`https://amoy.polygonscan.com/address/${polygonAddress}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="hover:text-white flex items-center gap-1 transition-colors"
+                                        >
+                                            <ExternalLink className="h-3 w-3" /> Explorer
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                        <div className="flex items-center justify-between text-xs p-4 bg-white/5 rounded-2xl border border-white/10 font-mono text-gray-400">
-                            <span>0x7...E42</span>
-                            <div className="flex gap-4">
-                                <button className="hover:text-white flex items-center gap-1 transition-colors">
-                                    <Copy className="h-3 w-3" /> Copy Address
-                                </button>
-                                <button className="hover:text-white flex items-center gap-1 transition-colors">
-                                    <ExternalLink className="h-3 w-3" /> Explorer
-                                </button>
-                            </div>
+                        <div className="bg-brand-primary/5 rounded-2xl p-4 border border-brand-primary/10 flex gap-3 text-xs text-brand-primary">
+                            <Shield className="h-4 w-4 shrink-0" />
+                            <p>Connecting with MetaMask ensures that only authorized administrators can sign verification transactions.</p>
                         </div>
                     </div>
                 </motion.div>
             </div>
 
-            <div className="flex justify-end p-6 bg-white/5 rounded-3xl border border-white/10">
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="bg-brand-primary hover:bg-brand-primary/90 text-white px-8 py-3 rounded-xl font-bold shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:shadow-[0_0_25px_rgba(59,130,246,0.3)] transition-all flex items-center gap-3 disabled:opacity-50"
-                >
-                    {isSaving ? 'Processing...' : (
-                        <>
-                            <CheckCircle2 className="h-5 w-5" />
-                            Save Configuration
-                        </>
-                    )}
-                </button>
-            </div>
         </div>
     );
 };

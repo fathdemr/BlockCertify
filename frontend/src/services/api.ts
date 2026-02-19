@@ -32,39 +32,65 @@ api.interceptors.response.use(
     }
 )
 
+export interface PrepareUploadResponse {
+    diplomaHash: string;
+    arweaveTxID: string;
+    arweaveUrl: string;
+}
+
+export interface ConfirmUploadPayload {
+    diplomaHash: string;
+    arweaveTxID: string;
+    polygonTxHash: string;
+    blockNumber: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    university: string;
+    faculty: string;
+    department: string;
+    graduationYear: number;
+    studentNumber: string;
+    nationality: string;
+}
+
+export interface ConfirmUploadResponse {
+    success: boolean;
+    diplomaHash: string;
+    arweaveTxID: string;
+    arweaveUrl: string;
+    polygonTxHash: string;
+    blockNumber: number;
+}
+
 export const diplomaService = {
-    upload: async (formData: FormData) => {
-        try {
-            const response = await api.post('/v1/diploma/upload', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Error uploading diploma:', error);
-            throw error;
-        }
+    /**
+     * Phase 1: Upload PDF to Arweave, get back diploma hash + arweave tx ID.
+     * The frontend then uses these to sign the Polygon transaction via MetaMask.
+     */
+    prepare: async (formData: FormData): Promise<PrepareUploadResponse> => {
+        const response = await api.post('/v1/diploma/prepare', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    /**
+     * Phase 2: After MetaMask signed the Polygon tx, tell the backend to save the record.
+     */
+    confirm: async (payload: ConfirmUploadPayload): Promise<ConfirmUploadResponse> => {
+        const response = await api.post('/v1/diploma/confirm', payload);
+        return response.data;
     },
 
     verify: async (diplomaId: string) => {
-        try {
-            const response = await api.post('/v1/diploma/verify', { DiplomaID: diplomaId });
-            return response.data;
-        } catch (error) {
-            console.error('Error verifying diploma:', error);
-            throw error;
-        }
+        const response = await api.post('/v1/diploma/verify', { DiplomaID: diplomaId });
+        return response.data;
     },
 
     getAllDiplomas: async () => {
-        try {
-            const response = await api.get('/v1/diploma/records');
-            return response.data;
-        } catch (error) {
-            console.error('Error retrieving diploma:', error);
-            throw error;
-        }
+        const response = await api.get('/v1/diploma/records');
+        return response.data;
     },
 
     getDiplomaFile: async (diplomaId: string) => {

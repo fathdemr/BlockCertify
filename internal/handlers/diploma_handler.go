@@ -31,13 +31,16 @@ func NewDiplomaHandler(service services.DiplomaService) *DiplomaHandler {
 	}
 }
 
-func (h *DiplomaHandler) Upload(c *gin.Context) {
+// PrepareUpload handles the first phase of diploma issuance.
+// It receives the PDF + metadata, uploads the file to Arweave, and returns
+// the diploma hash and Arweave tx ID for the frontend to sign on Polygon via MetaMask.
+func (h *DiplomaHandler) PrepareUpload(c *gin.Context) {
 
 	contentType := c.GetHeader("Content-Type")
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid content type",
-			"details": "multipart/form-data reuqired",
+			"details": "multipart/form-data required",
 		})
 		return
 	}
@@ -130,8 +133,7 @@ func (h *DiplomaHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	// Upload diploma
-	response, err := h.service.Upload(filePath, diplomaHash, reqMeta)
+	response, err := h.service.PrepareUpload(filePath, diplomaHash, reqMeta)
 	if err != nil {
 		appErr, ok := err.(*apperrors.AppError)
 		if ok {
@@ -149,6 +151,30 @@ func (h *DiplomaHandler) Upload(c *gin.Context) {
 				"error": err.Error(),
 			})
 		}
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ConfirmUpload handles the second phase of diploma issuance.
+// It receives the Polygon tx hash (signed by MetaMask) and saves the diploma record to the DB.
+func (h *DiplomaHandler) ConfirmUpload(c *gin.Context) {
+
+	var req dto.ConfirmUploadRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	response, err := h.service.ConfirmUpload(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 

@@ -7,7 +7,6 @@ import (
 	"BlockCertify/internal/repositories"
 	apperrors "BlockCertify/pkg/errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 	"time"
@@ -16,7 +15,8 @@ import (
 )
 
 type DiplomaService interface {
-	Upload(filePath, fileHash string, metadata dto.DiplomaMetadataRequest) (*dto.UploadResponse, error)
+	PrepareUpload(filePath, fileHash string, metadata dto.DiplomaMetadataRequest) (*dto.PrepareUploadResponse, error)
+	ConfirmUpload(req dto.ConfirmUploadRequest) (*dto.UploadResponse, error)
 	Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error)
 	GetArweaveUrlByDiplomaID(diplomaID string) string
 	GetAllDiplomaFromDatabase() []dto.HistoryResponse
@@ -36,17 +36,20 @@ func NewDiplomaService(arweave ArweaveService, blockchain BlockchainService, rep
 	}
 }
 
-func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMetadataRequest) (*dto.UploadResponse, error) {
+// PrepareUpload validates the diploma, uploads it to Arweave, and returns the
+// hashes the frontend needs to sign the Polygon transaction via MetaMask.
+// It does NOT touch the Polygon blockchain itself.
+func (s *diplomaService) PrepareUpload(filePath, fileHash string, reqMeta dto.DiplomaMetadataRequest) (*dto.PrepareUploadResponse, error) {
 
-	//Check before upload the arweave if diploma already exists
-	slog.Info("Checking if diploma exists", "hash", fileHash)
+	// Check on-chain if diploma already exists (read-only call, no signing)
+	slog.Info("Checking if diploma exists on-chain", "hash", fileHash)
 	exists, existingArweaveTxID, err := s.Blockchain.VerifyDiploma(fileHash)
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrBlockchainFailed, "Failed to check if diploma exists", err)
 	}
 
 	if exists {
-		return nil, apperrors.New(apperrors.ErrDiplomaExists, fmt.Sprintf("Diploma already registered. Arweave TxID: %s", existingArweaveTxID), err)
+		return nil, apperrors.New(apperrors.ErrDiplomaExists, fmt.Sprintf("Diploma already registered. Arweave TxID: %s", existingArweaveTxID), nil)
 	}
 
 	slog.Info("Uploading to Arweave...")
@@ -63,27 +66,41 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 		)
 	}
 
-	log.Println("Storing on Polygon...")
-	result, err := s.Blockchain.StoreDiploma(fileHash, arweaveTxID)
-	if err != nil {
-		return nil, err
-	}
+	arweaveURL := fmt.Sprintf("https://arweave.net/%s", arweaveTxID)
+
+	return &dto.PrepareUploadResponse{
+		DiplomaHash: fileHash,
+		ArweaveTxID: arweaveTxID,
+		ArweaveURL:  arweaveURL,
+	}, nil
+}
+
+// ConfirmUpload saves the diploma record to the database after the frontend
+// has successfully submitted the Polygon transaction via MetaMask.
+func (s *diplomaService) ConfirmUpload(req dto.ConfirmUploadRequest) (*dto.UploadResponse, error) {
+
+	slog.Info("Confirming diploma upload", "polygonTxHash", req.PolygonTxHash)
+
+	polygonURL := fmt.Sprintf("https://amoy.polygonscan.com/tx/%s", req.PolygonTxHash)
+	arweaveURL := fmt.Sprintf("https://arweave.net/%s", req.ArweaveTxID)
 
 	tx := s.repo.CreateTransaction()
 
 	diplomaID, err := uuid.NewV7()
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to generate diploma ID: %w", err)
+	}
 
-	owner := fmt.Sprintf("%s %s", reqMeta.FirstName, reqMeta.LastName)
-	polygonURL := fmt.Sprintf("https://amoy.polygonscan.com/tx/%s", result.TransactionHash)
-	arweaveURL := fmt.Sprintf("https://arweave.net/%s", arweaveTxID)
+	owner := fmt.Sprintf("%s %s", req.FirstName, req.LastName)
 
 	diploma := models.Diploma{
 		ID:          diplomaID,
 		PublicID:    helper.GenerateDiplomaPublicIDFromUUID(diplomaID),
-		Hash:        fileHash,
-		ArweaveTxID: arweaveTxID,
+		Hash:        req.DiplomaHash,
+		ArweaveTxID: req.ArweaveTxID,
 		ArweaveURL:  arweaveURL,
-		PolygonTxID: result.TransactionHash,
+		PolygonTxID: req.PolygonTxHash,
 		PolygonURL:  polygonURL,
 		Owner:       owner,
 		Timestamp:   time.Time{},
@@ -97,15 +114,15 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 	diplomaMetadata := models.DiplomaMetaData{
 		ID:             uuid.Must(uuid.NewV7()),
 		DiplomaID:      diploma.ID,
-		FirstName:      reqMeta.FirstName,
-		LastName:       reqMeta.LastName,
-		Email:          reqMeta.Email,
-		University:     reqMeta.University,
-		Faculty:        reqMeta.Faculty,
-		Department:     reqMeta.Department,
-		GraduationYear: reqMeta.GraduationYear,
-		StudentNumber:  reqMeta.StudentNumber,
-		Nationality:    reqMeta.Nationality,
+		FirstName:      req.FirstName,
+		LastName:       req.LastName,
+		Email:          req.Email,
+		University:     req.University,
+		Faculty:        req.Faculty,
+		Department:     req.Department,
+		GraduationYear: req.GraduationYear,
+		StudentNumber:  req.StudentNumber,
+		Nationality:    req.Nationality,
 	}
 
 	if err := tx.Create(&diplomaMetadata).Error; err != nil {
@@ -117,47 +134,12 @@ func (s *diplomaService) Upload(filePath, fileHash string, reqMeta dto.DiplomaMe
 
 	return &dto.UploadResponse{
 		Success:       true,
-		DiplomaHash:   fileHash,
-		ArweaveTxID:   arweaveTxID,
+		DiplomaHash:   req.DiplomaHash,
+		ArweaveTxID:   req.ArweaveTxID,
 		ArweaveURL:    arweaveURL,
-		PolygonTxHash: result.TransactionHash,
-		BlockNumber:   result.BlockNumber,
+		PolygonTxHash: req.PolygonTxHash,
+		BlockNumber:   req.BlockNumber,
 	}, nil
-}
-
-func (s *diplomaService) ResolveHashFromReference(polygonTx, arweaveTxID string) (string, error) {
-	slog.Info("Resolving hash from reference")
-
-	// 1️⃣ Try Polygon reference first (strongest proof)
-	if polygonTx != "" {
-		slog.Info("Resolving hash from polygon tx", "tx", polygonTx)
-
-		hash, err := s.repo.GetHashFromPolygonTxID(polygonTx)
-		if err == nil && hash != "" {
-			return hash, nil
-		}
-
-		slog.Info("Polygon tx not found or error", "err", err)
-	}
-
-	// 2️⃣ Try Arweave reference
-	if arweaveTxID != "" {
-		slog.Info("Resolving hash from arweave tx", "tx", arweaveTxID)
-
-		hash, err := s.repo.GetHashFromArweaveTxID(arweaveTxID)
-		if err == nil && hash != "" {
-			return hash, nil
-		}
-
-		slog.Info("Arweave tx not found or error", "err", err)
-	}
-
-	err := fmt.Errorf("could not resolve diploma hash from provided references")
-
-	slog.Error("could not resolve diploma hash from provided references", "polygonTx", polygonTx, "arweaveTxID", arweaveTxID, "err", err)
-
-	return "", err
-
 }
 
 func (s *diplomaService) Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error) {

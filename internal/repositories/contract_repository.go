@@ -243,6 +243,7 @@ func NewContractRepository(cfg *config.Config) (*ContractRepository, error) {
 		return nil, fmt.Errorf("failed to connect to blockchain: %w", err)
 	}
 
+	//TODO : put a file reader for ABI and read from file instead of hardcoding
 	parsedABI, err := abi.JSON(bytes.NewReader([]byte(contractABI)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)

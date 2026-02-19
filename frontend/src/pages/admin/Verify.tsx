@@ -178,12 +178,10 @@ const Verify: React.FC = () => {
                                             <span className="text-sm font-medium uppercase tracking-wider">Arweave Data Link</span>
                                         </div>
                                         <div className="bg-black/20 p-3 rounded-lg border border-white/5 font-mono text-xs text-brand-secondary break-all leading-relaxed">
-                                            <a
-                                                href={diplomaService.getDiplomaFile(result.data.id)}
-                                                target={`_blank`}
-                                                rel="noopener noreferrer"
-                                                className={"hover:text-white-underline"}
-                                            >Get Diploma</a>
+                                            <button
+                                                onClick={() => diplomaService.getDiplomaFile(result.data!.id)}
+                                                className="hover:underline cursor-pointer"
+                                            >Get Diploma</button>
                                         </div>
                                     </div>
                                 </div>
