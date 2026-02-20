@@ -4,9 +4,9 @@ import (
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
 	"BlockCertify/internal/models"
+	apperrors "BlockCertify/internal/pkg/errors"
 	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/security"
-	apperrors "BlockCertify/pkg/errors"
 	"fmt"
 	"log/slog"
 

@@ -21,8 +21,14 @@
 *.so
 *.dylib
 diploma-server
+main
 *.test
 *.out
+bin/
+
+# Frontend build artifacts (rebuilt inside Docker)
+frontend/node_modules/
+frontend/dist/
 
 # Uploads directory (will be created in container)
 uploads/*

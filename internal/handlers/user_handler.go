@@ -3,11 +3,10 @@ package handlers
 import (
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
+	apperrors "BlockCertify/internal/pkg/errors"
 	"BlockCertify/internal/services"
 	"net/http"
 	"time"
-
-	apperrors "BlockCertify/pkg/errors"
 
 	"github.com/gin-gonic/gin"
 )

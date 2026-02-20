@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -52,8 +53,15 @@ type DatabaseConfig struct {
 }
 
 func Load() (*Config, error) {
+	// Load .env if present (local dev). In Docker, env vars are injected by
+	// docker-compose and .env will not exist — that is perfectly fine.
 	if err := godotenv.Load(); err != nil {
-		return nil, err
+		var pathErr *os.PathError
+		if !errors.As(err, &pathErr) {
+			// Not a missing-file error — something genuinely wrong (parse error etc.)
+			return nil, fmt.Errorf("failed to load .env: %w", err)
+		}
+		// .env simply doesn't exist; continue using environment variables.
 	}
 
 	chainIDStr := getEnvOrDefault("POLYGON_CHAIN_ID", "80002")

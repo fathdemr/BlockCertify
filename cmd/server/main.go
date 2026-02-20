@@ -11,6 +11,7 @@ import (
 	"BlockCertify/internal/security"
 	"BlockCertify/internal/services"
 	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -23,14 +24,22 @@ func main() {
 	//Load conf
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		slog.Error("Failed to load config: %v", err)
 	}
 
 	r := gin.Default()
 
-	// CORS config (allow frontend localhost:5173)
+	// CORS config
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins: []string{
+			"http://localhost", // Docker frontend (Nginx port 80)
+			"http://localhost:80",
+			"http://localhost:5173", // Vite dev server
+			"http://localhost:8080",
+			"http://localhost:3000",
+			"http://185.252.234.84",
+			"http://185.252.234.84:80",
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -40,7 +49,12 @@ func main() {
 
 	db, err := database.Init(cfg.Db)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database: %v", err)
+	}
+
+	err = database.Migrate(db)
+	if err != nil {
+		slog.Error("Failed to migrate database: %v", err)
 	}
 
 	contractRepo, err := repositories.NewContractRepository(cfg)
@@ -84,6 +98,7 @@ func main() {
 	//Public routes
 	routes.UserRoutes(auth, userHandler)
 	routes.UniversityRoutes(api, userHandler)
+	routes.PingRoutes(api)
 
 	//Protected routes
 	diploma.Use(AuthMiddleware.Authorize())

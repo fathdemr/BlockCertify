@@ -2,6 +2,7 @@ package database
 
 import (
 	"BlockCertify/internal/config"
+	"BlockCertify/internal/models"
 	"fmt"
 
 	"gorm.io/driver/postgres"
@@ -17,4 +18,17 @@ func Init(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+func Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.Admin{},
+		&models.Department{},
+		&models.Diploma{},
+		&models.DiplomaMetaData{},
+		&models.Faculties{},
+		&models.Student{},
+		&models.Universities{},
+		&models.User{},
+	)
 }

@@ -3,8 +3,8 @@ package services
 import (
 	"BlockCertify/internal/config"
 	"BlockCertify/internal/dto"
+	apperrors "BlockCertify/internal/pkg/errors"
 	"BlockCertify/internal/repositories"
-	apperrors "BlockCertify/pkg/errors"
 	"crypto/ecdsa"
 	"fmt"
 	"log"

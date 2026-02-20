@@ -3,9 +3,9 @@ package handlers
 import (
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
+	apperrors "BlockCertify/internal/pkg/errors"
 	"BlockCertify/internal/services"
 	"BlockCertify/internal/utils"
-	apperrors "BlockCertify/pkg/errors"
 	"errors"
 	"io"
 	"log"

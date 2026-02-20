@@ -1,10 +1,9 @@
 package security
 
 import (
+	apperrors "BlockCertify/internal/pkg/errors"
 	"fmt"
 	"time"
-
-	apperrors "BlockCertify/pkg/errors"
 
 	"github.com/golang-jwt/jwt/v4"
 )

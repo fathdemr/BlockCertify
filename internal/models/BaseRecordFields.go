@@ -3,14 +3,15 @@ package models
 import "time"
 
 type BaseRecordFields struct {
-	CreatedAt        time.Time `json:"created_at,omitempty"`         // Oluşturulma Tarihi
-	CreatedBy        uint64    `json:"created_by,omitempty"`         // Oluşturan Kullanıcı ID'si
-	CreatedByName    string    `json:"created_by_name,omitempty"`    // Oluşturan Kullanıcı Adı
-	CreatedIpAddress string    `json:"created_ip_address,omitempty"` // Oluşturan kullanıcının ip adresi
-	UpdatedAt        time.Time `json:"updated_at,omitempty"`         // Güncellenme Tarihi
-	UpdatedBy        uint64    `json:"updated_by,omitempty"`         // Güncelleyen Kullanıcı ID'si
-	UpdatedByName    string    `json:"updated_by_name,omitempty"`    // Güncelleyen Kullanıcı Adı
-	UpdatedIpAddress string    `json:"updated_ip_address,omitempty"` // Güncelleyen kullanıcının ip adresi
+	CreatedAt        time.Time `gorm:"column:created_at"`         // Oluşturulma Tarihi
+	CreatedBy        uint64    `gorm:"column:created_by"`         // Oluşturan Kullanıcı ID'si
+	CreatedByName    string    `gorm:"column:created_by_name"`    // Oluşturan Kullanıcı Adı
+	CreatedIpAddress string    `gorm:"column:created_ip"`         // Oluşturan kullanıcının ip adresi
+	UpdatedAt        time.Time `gorm:"column:updated_at"`         // Güncellenme Tarihi
+	UpdatedBy        uint64    `gorm:"column:updated_by"`         // Güncelleyen Kullanıcı ID'si
+	UpdatedByName    string    `gorm:"column:updated_by_name"`    // Güncelleyen Kullanıcı Adı
+	UpdatedIp        string    `gorm:"updated_ip"`                // Güncelleyen kullanıcının ip
+	UpdatedIPAddress string    `gorm:"column:updated_ip_address"` // Güncelleyen kullanıcının ip adresi
 }
 
 func (u *BaseRecordFields) SetCreatedUser(id uint64, name string, ipAddress string) {
@@ -20,9 +21,10 @@ func (u *BaseRecordFields) SetCreatedUser(id uint64, name string, ipAddress stri
 	u.CreatedIpAddress = ipAddress
 }
 
-func (u *BaseRecordFields) SetUpdatedUser(id uint64, name string, ipAddress string) {
+func (u *BaseRecordFields) SetUpdatedUser(id uint64, name string, ip string, ipAddress string) {
 	u.UpdatedAt = time.Now()
 	u.UpdatedBy = id
 	u.UpdatedByName = name
-	u.UpdatedIpAddress = ipAddress
+	u.UpdatedIp = ip
+	u.UpdatedIPAddress = ipAddress
 }

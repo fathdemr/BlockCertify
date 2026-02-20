@@ -1,0 +1,97 @@
+
+# ─── Common environment references ────────────────────────────────────────────
+x-backend-env: &backend-env
+  PORT: "8080"
+  ARWEAVE_KEY: ${ARWEAVE_KEY}
+  POLYGON_RPC_URL: ${POLYGON_RPC_URL:-https://rpc-amoy.polygon.technology}
+  POLYGON_CHAIN_ID: ${POLYGON_CHAIN_ID:-80002}
+  PRIVATE_KEY: ${PRIVATE_KEY}
+  CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  JWT_EXP_HOURS: ${JWT_EXP_HOURS:-24}
+  APP_DB_HOST: db
+  APP_DB_PORT: "5432"
+  APP_DB_USERNAME: ${APP_DB_USERNAME:-blockcertify}
+  APP_DB_PASSWORD: ${APP_DB_PASSWORD:-blockcertify}
+  APP_DB_NAME: ${APP_DB_NAME:-blockcertify}
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: blockcertify-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${APP_DB_USERNAME:-blockcertify}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-blockcertify}
+      POSTGRES_DB: ${APP_DB_NAME:-blockcertify}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    networks:
+      - blockcertify-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-blockcertify} -d ${APP_DB_NAME:-blockcertify}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Go Backend ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: blockcertify-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *backend-env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./public:/app/public
+      - ./arweave_keyfile.json:/app/arweave_keyfile.json:ro
+    ports:
+      - "${PORT:-8080}:8080"
+    networks:
+      - blockcertify-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── React / Vite Frontend (Nginx) ────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: blockcertify-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - blockcertify-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  blockcertify-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+    driver: local

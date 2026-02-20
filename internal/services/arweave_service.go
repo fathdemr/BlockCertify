@@ -2,7 +2,7 @@ package services
 
 import (
 	"BlockCertify/internal/config"
-	apperrors "BlockCertify/pkg/errors"
+	apperrors "BlockCertify/internal/pkg/errors"
 	"log"
 	"log/slog"
 	"math/big"
