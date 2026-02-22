@@ -9,7 +9,11 @@ func (Department) TableName() string {
 }
 
 type Department struct {
-	ID             uuid.UUID
-	FacultyID      uuid.UUID
-	DepartmentName string
+	ID             uuid.UUID `gorm:"primaryKey;column:id"`
+	DepartmentName string    `gorm:"column:name"`
+
+	FacultyID uuid.UUID `gorm:"column:faculty_id"`
+	Faculty   Faculties `gorm:"foreignKey:FacultyID;references:ID"`
+
+	BaseRecordFields
 }
