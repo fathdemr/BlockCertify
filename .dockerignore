@@ -6,6 +6,7 @@
 .env
 .env.local
 .env.*.local
+.env.production
 
 # IDE
 .vscode
@@ -43,10 +44,9 @@ Thumbs.db
 # Documentation
 README.md
 docs/
-*.md
+API_DOCS.md
 
-# Docker
-Dockerfile
+# Docker (don't copy compose/dockerignore into build context)
 .dockerignore
 docker-compose.yml
 
@@ -56,3 +56,6 @@ docker-compose.yml
 # Temporary files
 tmp/
 temp/
+
+# Gemini
+.gemini/

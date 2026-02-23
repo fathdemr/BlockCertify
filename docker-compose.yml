@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BlockCertify – Docker Compose
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose up -d        (local dev / production)
+#   docker compose down         (stop all)
+#   docker compose logs -f      (tail logs)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${APP_DB_USERNAME:-blockcertify}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-blockcertify}
+      POSTGRES_DB:       ${APP_DB_NAME:-blockcertify}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USERNAME:-blockcertify}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Go Backend ─────────────────────────────────────────────────────────────
+  backend:
+    image: fathdemr/blockcertify-backend:latest
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_DB_HOST: db
+      APP_DB_PORT: "5432"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── React Frontend (Nginx) ────────────────────────────────────────────────
+  frontend:
+    image: fathdemr/blockcertify-frontend:latest
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_CONTRACT_ADDRESS: ${VITE_CONTRACT_ADDRESS:-0x3015B836020DE8379a1DCe7Aa08c875a2C58762c}
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-net
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+  uploads:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  app-net:
+    driver: bridge
