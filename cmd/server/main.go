@@ -63,9 +63,12 @@ func main() {
 	}
 	defer contractRepo.Close()
 
+	//Initialize repositories
 	userRepo := repositories.NewUserRepository(db)
 	diplomaRepo := repositories.NewDiplomaRepository(db)
 	uniRepo := repositories.NewUniversityRepository(db)
+	facultyRepo := repositories.NewFacultyRepository(db)
+	departmentRepo := repositories.NewDepartmentRepository(db)
 
 	tokenHelper := security.NewJWTHelper(
 		cfg.JWTConfig.JWTSecret,
@@ -84,11 +87,15 @@ func main() {
 	AuthMiddleware := middleware.NewAuthMiddleware(tokenHelper, userRepo)
 	uniService := services.NewUniversityService(uniRepo)
 	walletService := services.NewWalletService()
+	facultyService := services.NewFacultyService(facultyRepo)
+	departmentService := services.NewDepartmentService(departmentRepo)
 
 	//Initialize handlers
 	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
 	userHandler := handlers.NewUserHandler(userService, uniService)
 	walletHandler := handlers.NewWalletHandler(walletService)
+	facultyHandler := handlers.NewFacultyHandler(facultyService)
+	departmentHandler := handlers.NewDepartmentHandler(departmentService)
 
 	api := r.Group("/api/v1")
 	auth := api.Group("/auth")
@@ -99,6 +106,8 @@ func main() {
 	routes.UserRoutes(auth, userHandler)
 	routes.UniversityRoutes(api, userHandler)
 	routes.PingRoutes(api)
+	routes.FacultyRoutes(api, facultyHandler)
+	routes.DepartmentRoutes(api, departmentHandler)
 
 	//Protected routes
 	diploma.Use(AuthMiddleware.Authorize())
