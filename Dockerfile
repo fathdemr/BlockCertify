@@ -18,7 +18,7 @@ USER 65532:65532
 # Buradaki binary adı ile Makefile'daki çıktı adı uyumlu olmalı (aşağıya bak)
 COPY dist/linux/api api
 
-EXPOSE 8080
+EXPOSE 5075
 
 
 ENTRYPOINT ["./api"]

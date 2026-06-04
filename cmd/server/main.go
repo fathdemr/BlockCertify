@@ -82,7 +82,7 @@ func main() {
 	// ── 4. HTTP Server ─────────────────────────────────────────────────────────
 	port := config.Params.GetString("app.port")
 	if port == "" {
-		port = "8080"
+		port = "5075"
 	}
 	if !strings.HasPrefix(port, ":") {
 		port = "0.0.0.0:" + port
@@ -96,7 +96,7 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("✅ sunucu başlatıldı", "addr", "http://localhost"+port)
+		slog.Info("✅ sunucu başlatıldı", "addr", "http://"+port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("❌ sunucu hatası", "error", err)
 			os.Exit(1)
