@@ -1,22 +1,6 @@
 package repositories
 
-import (
-	"BlockCertify/internal/config"
-	"bytes"
-	"context"
-	"crypto/ecdsa"
-	"fmt"
-	"math/big"
-	"time"
-
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
-)
-
+/*
 const contractABI = `[
   {
     "anonymous": false,
@@ -286,7 +270,7 @@ func (r *ContractRepository) GetFeeData() (*big.Int, *big.Int, error) {
 	return gasPrice, gasTipCap, nil
 }
 
-func (r *ContractRepository) VerifyDiploma(diplomaHash string) (bool, string, error) {
+func (r *ContractRepository) VerifyDiplomaWithContract(diplomaHash string) (bool, string, error) {
 
 	ctx := context.Background()
 
@@ -324,7 +308,7 @@ func (r *ContractRepository) VerifyDiploma(diplomaHash string) (bool, string, er
 	return exists, arweaveTxID, nil
 }
 
-func (r *ContractRepository) StoreDiploma(diplomaHash, arweaveTxID string) (*types.Receipt, error) {
+func (r *ContractRepository) StoreDiplomaWithContract(diplomaHash, arweaveTxID string) (*types.Receipt, error) {
 
 	ctx := context.Background()
 
@@ -410,3 +394,5 @@ func (r *ContractRepository) waitForReceipt(txHash common.Hash) (*types.Receipt,
 	}
 	return nil, fmt.Errorf("transaction receipt not found after timeout")
 }
+
+*/

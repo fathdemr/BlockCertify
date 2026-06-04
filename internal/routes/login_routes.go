@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func UserRoutes(api *gin.RouterGroup, h *handlers.UserHandler) {
+func UserRoutes(api *gin.RouterGroup) {
 	user := api.Group("/user")
 	{
-		user.POST("/login", h.Login)
-		user.POST("/register/admin", h.RegisterAdmin)
-		user.POST("/logout", h.Logout)
+		user.POST("/login", handlers.Login)
+		user.POST("/register/admin", handlers.RegisterAdmin)
+		user.POST("/logout", handlers.Logout)
 	}
 }

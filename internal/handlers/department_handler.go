@@ -1,29 +1,40 @@
 package handlers
 
 import (
-	"BlockCertify/internal/dto"
-	"BlockCertify/internal/services"
+	"BlockCertify/internal/config"
+	"BlockCertify/internal/services/DepartmentService"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gofrs/uuid/v5"
 )
 
-type DepartmentHandler struct {
-	service services.DepartmentService
-}
+func GetDepartmentByID(c *gin.Context) {
+	departmentService := DepartmentService.New(config.DB)
 
-func NewDepartmentHandler(service services.DepartmentService) *DepartmentHandler {
-	return &DepartmentHandler{service: service}
-}
+	// Accept faculty_id as query param (browser-friendly)
+	// Falls back to JSON body for backward compatibility
+	var facultyID uuid.UUID
 
-func (h *DepartmentHandler) GetDepartmentByID(c *gin.Context) {
-
-	var req dto.DepartmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if qid := c.Query("faculty_id"); qid != "" {
+		parsed, err := uuid.FromString(qid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid faculty_id"})
+			return
+		}
+		facultyID = parsed
+	} else {
+		var req struct {
+			ID uuid.UUID `json:"id"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || req.ID == uuid.Nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "faculty_id required"})
+			return
+		}
+		facultyID = req.ID
 	}
 
-	response, err := h.service.GetDepartmentByID(req.FacultyID)
+	response, err := departmentService.GetDepartmentByID(facultyID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

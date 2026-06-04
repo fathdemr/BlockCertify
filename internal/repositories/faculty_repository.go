@@ -1,11 +1,6 @@
 package repositories
 
-import (
-	"BlockCertify/internal/models"
-
-	"gorm.io/gorm"
-)
-
+/*
 type FacultyRepository interface {
 	GetFaculties(universityID string) ([]models.Faculties, error)
 }
@@ -31,3 +26,6 @@ func (r *facultyRepository) GetFaculties(universityID string) ([]models.Facultie
 
 	return faculties, nil
 }
+
+
+*/

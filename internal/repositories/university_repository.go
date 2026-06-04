@@ -1,13 +1,6 @@
 package repositories
 
-import (
-	"BlockCertify/internal/dto"
-	"BlockCertify/internal/models"
-	"log/slog"
-
-	"gorm.io/gorm"
-)
-
+/*
 type UniversityRepository interface {
 	GetUniversityByID(id string) (models.Universities, error)
 	GetUniversitiesFromDBRecord() ([]dto.UniversitiesResponse, error)
@@ -50,3 +43,6 @@ func (r *universityRepository) GetUniversitiesFromDBRecord() ([]dto.Universities
 
 	return response, nil
 }
+
+
+*/

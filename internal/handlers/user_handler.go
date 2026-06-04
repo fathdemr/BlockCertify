@@ -1,37 +1,31 @@
 package handlers
 
 import (
+	"BlockCertify/internal/config"
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
 	apperrors "BlockCertify/internal/pkg/errors"
-	"BlockCertify/internal/services"
+	"BlockCertify/internal/services/CacheService"
+	"BlockCertify/internal/services/UniversityService"
+	"BlockCertify/internal/services/UserService"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-type UserHandler struct {
-	service    services.UserService
-	uniService services.UniversityService
-}
-
-func NewUserHandler(service services.UserService, uniService services.UniversityService) *UserHandler {
-	return &UserHandler{
-		service:    service,
-		uniService: uniService,
-	}
-}
-
-func (h *UserHandler) Login(c *gin.Context) {
+func Login(c *gin.Context) {
 
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	cacheService := CacheService.New(config.RedisClient)
+	userService := UserService.New(config.DB, config.Params)
+	userService.UseCacheService(cacheService)
 
-	response, err := h.service.Login(req)
+	response, err := userService.Login(req)
 	if err != nil {
 		appErr, ok := err.(*apperrors.AppError)
 		if ok {
@@ -46,7 +40,8 @@ func (h *UserHandler) Login(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Login failed",
+			"error":   "Login failed",
+			"details": err.Error(),
 		})
 		return
 	}
@@ -55,9 +50,12 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
-func (h *UserHandler) RegisterAdmin(c *gin.Context) {
+func RegisterAdmin(c *gin.Context) {
 
 	var req dto.RegisterRequest
+	userService := UserService.New(config.DB, config.Params)
+	cacheService := CacheService.New(config.RedisClient)
+	userService.UseCacheService(cacheService)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -66,7 +64,7 @@ func (h *UserHandler) RegisterAdmin(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Register(req); err != nil {
+	if err := userService.Register(req); err != nil {
 		appErr, ok := err.(*apperrors.AppError)
 		if ok {
 			details := ""
@@ -91,9 +89,11 @@ func (h *UserHandler) RegisterAdmin(c *gin.Context) {
 
 }
 
-func (h *UserHandler) GetUniversities(c *gin.Context) {
+func GetUniversities(c *gin.Context) {
 
-	universities, err := h.uniService.GetUniversitiesFromDBRecord()
+	univerityService := UniversityService.New(config.DB)
+
+	universities, err := univerityService.GetUniversitiesFromDBRecord()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
@@ -103,7 +103,7 @@ func (h *UserHandler) GetUniversities(c *gin.Context) {
 	c.JSON(http.StatusOK, universities)
 }
 
-func (h *UserHandler) Logout(c *gin.Context) {
+func Logout(c *gin.Context) {
 	helper.ClearCookie(c, "jwt")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",

@@ -1,85 +1,101 @@
-APP_NAME         := blockcertify
-BACKEND_IMG      := fathdemr/$(APP_NAME)-backend
-FRONTEND_IMG     := fathdemr/$(APP_NAME)-frontend
-PLATFORMS        := linux/amd64,linux/arm64
+# ============================
+# BlockCertify API - Enhanced Makefile
+# Includes release-test and release-live targets
+# ============================
 
-# ─── Local Development ────────────────────────────────────────────────────────
-.PHONY: run
-run:                            ## Run backend locally (requires .env)
-	go run ./cmd/server
+# ==== Config ====
+IMAGE_NAME     ?= fathdemr/blockcertify-backend
+TAG            ?= $(shell date +%Y.%m.%d%H%M%S)
+PLATFORMS      ?= linux/amd64,linux/arm64
+BUILD_ARGS     ?=
 
-.PHONY: run-frontend
-run-frontend:                   ## Run frontend dev server
-	cd frontend && npm run dev
+# Clean tag (remove any whitespace)
+TAG := $(shell printf '%s' '$(TAG)' | tr -d '[:space:]')
 
-# ─── Build ────────────────────────────────────────────────────────────────────
-.PHONY: build
-build:                          ## Build Go binary
-	CGO_ENABLED=0 go build -o $(APP_NAME) ./cmd/server
+# ==== Tools ====
+DOCKER ?= docker
+BUILDX ?= docker buildx
 
-.PHONY: clean
-clean:                          ## Remove built binary
-	rm -f $(APP_NAME)
+# ==== Helpers ====
+GIT_SHA  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "nogit")
+DATETAG  := $(shell date +%Y%m%d%H%M)
 
-# ─── Docker Build ─────────────────────────────────────────────────────────────
-.PHONY: docker-build-backend
-docker-build-backend:           ## Build backend Docker image (current platform)
-	docker build -f backend.Dockerfile -t $(BACKEND_IMG):latest .
+.PHONY: help login print-tag load release tag-latest clean buildFile swag
 
-.PHONY: docker-build-frontend
-docker-build-frontend:          ## Build frontend Docker image (current platform)
-	docker build -f frontend.Dockerfile -t $(FRONTEND_IMG):latest .
+help:
+	@echo "BlockCertify API Build Targets:"
+	@echo "  make release                   # Build & push with timestamp tag"
+	@echo "  make load                      # Load image locally for development"
+	@echo "  make tag-latest                # Tag specific version as latest"
+	@echo "  make print-tag                 # Print image reference"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make release                   # Build & push with timestamp"
+	@echo "  make load                      # Load image locally for testing"
 
-.PHONY: docker-build
-docker-build: docker-build-backend docker-build-frontend  ## Build all Docker images
+# Build Hugo landing page
+hugo:
+	@echo "Building Hugo landing page..."
+	cd landing_page && hugo --minify
+	rm -rf landing_page_dist
+	cp -r landing_page/public landing_page_dist
+	@echo "Landing page built successfully."
 
-# ─── Docker Push (multi-platform) ────────────────────────────────────────────
-.PHONY: docker-push-backend
-docker-push-backend:            ## Build & push backend to Docker Hub (multi-platform)
-	@echo "==> Building & pushing $(BACKEND_IMG):latest for $(PLATFORMS)..."
-	docker buildx build --platform $(PLATFORMS) \
-		-f backend.Dockerfile \
-		-t $(BACKEND_IMG):latest \
-		--push .
+# Build the Go binary
+buildFile: swag
+	@echo "Stamping version $(TAG) into config/version.go..."
+	@sed -i.bak 's/var Version = "[^"]*"/var Version = "$(TAG)"/' internal/config/version.go
+	@echo "Compiling for Linux amd64..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -a -installsuffix cgo -o ./dist/linux/api ./cmd/server
+	@mv internal/config/version.go.bak internal/config/version.go
+	@echo "Version restored to dev"
 
-.PHONY: docker-push-frontend
-docker-push-frontend:           ## Build & push frontend to Docker Hub (multi-platform)
-	@echo "==> Building & pushing $(FRONTEND_IMG):latest for $(PLATFORMS)..."
-	docker buildx build --platform $(PLATFORMS) \
-		-f frontend.Dockerfile \
-		-t $(FRONTEND_IMG):latest \
-		--push .
 
-.PHONY: docker-push
-docker-push: docker-push-backend docker-push-frontend  ## Push all images to Docker Hub
+# ==== SIMPLIFIED TARGETS ====
 
-# ─── Docker Compose (local) ──────────────────────────────────────────────────
-.PHONY: docker-up
-docker-up:                      ## Start all services locally
-	docker compose up -d --build
+# Print image tag
+print-tag:
+	@echo "$(IMAGE_NAME):$(TAG)"
 
-.PHONY: docker-down
-docker-down:                    ## Stop all services
-	docker compose down
+# Load image locally for development
+load: buildFile
+	$(BUILDX) build \
+	  --provenance=mode=max \
+	  --sbom=generator=syft \
+	  --platform linux/amd64 \
+	  -t $(IMAGE_NAME):$(TAG) \
+	  --load \
+	  $(BUILD_ARGS) .
 
-.PHONY: docker-logs
-docker-logs:                    ## Tail logs from all services
-	docker compose logs -f
+# Generate Swagger
+swag:
+	@echo "Generating Swagger docs..."
+	swag init --generalInfo cmd/server/swagger.go --parseDependency --parseInternal -q
 
-# ─── Server Deploy ────────────────────────────────────────────────────────────
-# Usage: make deploy SERVER=user@185.252.234.84
-.PHONY: deploy
-deploy: docker-push             ## Push images & deploy to remote server via SSH
-	@echo "==> Deploying to $(SERVER)..."
-	ssh $(SERVER) "\
-		cd ~/blockcertify && \
-		docker compose pull && \
-		docker compose up -d && \
-		docker image prune -f"
-	@echo "==> Deploy complete!"
+# Release to repository with latest tag
+release: buildFile
+	@echo "🚀 Building and releasing: $(IMAGE_NAME):$(TAG)"
+	$(BUILDX) build \
+	  --platform $(PLATFORMS) \
+	  -t $(IMAGE_NAME):$(TAG) \
+	  --push \
+	  $(BUILD_ARGS) .
+	@echo "🏷️ Tagging as latest..."
+	$(BUILDX) imagetools create \
+	  -t $(IMAGE_NAME):latest \
+	  $(IMAGE_NAME):$(TAG)
+	@echo "✅ Release completed: $(IMAGE_NAME):$(TAG)"
 
-# ─── Help ─────────────────────────────────────────────────────────────────────
-.PHONY: help
-help:                           ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
+# Tag specific version as latest
+tag-latest:
+	@echo "Tagging $(IMAGE_NAME):$(TAG) as latest"
+	$(BUILDX) imagetools create \
+	  -t $(IMAGE_NAME):latest \
+	  $(IMAGE_NAME):$(TAG)
+	@echo "✅ Image tagged as latest"
+
+# ==== UTILITIES ====
+
+# Clean Docker system
+clean:
+	$(DOCKER) system prune -f

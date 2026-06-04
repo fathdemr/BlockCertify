@@ -2,17 +2,12 @@ package main
 
 import (
 	"BlockCertify/internal/config"
-	"BlockCertify/internal/database"
-	"BlockCertify/internal/handlers"
 	"BlockCertify/internal/logger"
-	"BlockCertify/internal/middleware"
-	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/routes"
-	"BlockCertify/internal/security"
-	"BlockCertify/internal/services"
+	"context"
+	"fmt"
 	"log"
-	"log/slog"
-	"time"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -21,103 +16,79 @@ import (
 func main() {
 	logger.Init()
 
-	//Load conf
-	cfg, err := config.Load()
-	if err != nil {
-		slog.Error("Failed to load config: %v", err)
+	current, _ := os.Getwd()
+	fmt.Println(current)
+
+	if err := config.InitConfigFile("./internal"); err != nil {
+		panic(err)
+	}
+	if err := config.InitDB(); err != nil {
+		panic(err)
+	}
+	rediPingStatus := config.RedisClient.Ping(context.Background())
+	if rediPingStatus.Err() != nil {
+		panic(rediPingStatus.Err())
 	}
 
-	r := gin.Default()
+	app := gin.New()
 
-	// CORS config
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost", // Docker frontend (Nginx port 80)
-			"http://localhost:80",
-			"http://localhost:5173", // Vite dev server
-			"http://localhost:8080",
-			"http://localhost:3000",
-			"http://185.252.234.84",
-			"http://185.252.234.84:80",
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-
-	db, err := database.Init(cfg.Db)
-	if err != nil {
-		slog.Error("Failed to initialize database: %v", err)
+	app.ForwardedByClientIP = true
+	// Cors alayına hak veriyor. sonra kaldıracağız.
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = []string{
+		"Origin",           // İstek yapılan kaynağı (domain, port) belirtir.
+		"Authorization",    // Kimlik doğrulama bilgileri taşır (Bearer Token, Basic Auth vb.).
+		"Content-Type",     // İstek veya yanıt içeriğinin türünü belirtir (application/json, text/html vb.).
+		"Bilet",            // Özel bir kimlik doğrulama veya yetkilendirme başlığı olabilir.
+		"ApiKey",           // API erişimi için kullanılan anahtar.
+		"ApiSecret",        // API erişimi için gizli anahtar.
+		"X-Forwarded-For",  // İstek yapan istemcinin gerçek IP adresini taşır (proxy arkasındaysa).
+		"X-Real-Ip",        // Genellikle istemcinin gerçek IP adresini belirlemek için kullanılır.
+		"User-Agent",       // İstek yapan cihazın veya tarayıcının bilgisini taşır (örn. Chrome, Postman).
+		"Referer",          // Kullanıcının hangi sayfadan geldiğini gösterir.
+		"Accept-Language",  // İstemcinin tercih ettiği dil ayarlarını içerir.
+		"Accept-Encoding",  // Sunucunun hangi sıkıştırma formatlarını (gzip, deflate vb.) desteklediğini gösterir.
+		"Cache-Control",    // Önbellekleme politikasını belirtir.
+		"Connection",       // Bağlantının nasıl yönetileceğini belirler (keep-alive, close vb.).
+		"DNT",              // "Do Not Track" talebi, kullanıcının izlenmek istemediğini belirtir.
+		"X-Requested-With", // İsteğin AJAX olup olmadığını belirlemek için kullanılır.
+		"Sec-Fetch-Site",   // İsteğin hangi siteden yapıldığını gösterir (same-origin, cross-site vb.).
+		"Sec-Fetch-Mode",   // İsteğin türünü belirtir (cors, no-cors vb.).
+		"Sec-Fetch-Dest",   // Kaynağın hangi amaçla yüklendiğini gösterir (document, script vb.).
+		"X-Device-Id",      // İstemcinin cihaz ID’sini belirtmek için özel bir başlık.
+		"X-Device-Model",   // İstemcinin cihaz modelini belirtmek için özel bir başlık.
+		"X-OS-Version",     // İşletim sistemi sürümünü belirten özel bir başlık.
+		"X-Client-Version", // Mobil uygulama istemcisinin sürümünü belirten başlık.
+		"X-Platform",       // İstemcinin hangi platformdan geldiğini belirtir (iOS, Android, Web).
+		"X-Timezone",       // İstemcinin bulunduğu zaman dilimini belirtir.
+		"X-Session-Id",     // Kullanıcının oturum bilgisini taşır.
+		"X-App-Id",         // Mobil veya web uygulamasının kimliğini belirtir.
 	}
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
+	app.Use(cors.New(corsConfig))
 
-	err = database.Migrate(db)
-	if err != nil {
-		slog.Error("Failed to migrate database: %v", err)
-	}
+	port := 8080
 
-	contractRepo, err := repositories.NewContractRepository(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize contract repository: %v", err)
-	}
-	defer contractRepo.Close()
+	//Public API
+	//TODO middleware ekle
+	exapi := app.Group("/exapi")
+	routes.UserRoutes(exapi)
+	routes.UniversityRoutes(exapi)
+	routes.PingRoutes(exapi)
+	routes.FacultyRoutes(exapi)
+	routes.DepartmentRoutes(exapi)
 
-	//Initialize repositories
-	userRepo := repositories.NewUserRepository(db)
-	diplomaRepo := repositories.NewDiplomaRepository(db)
-	uniRepo := repositories.NewUniversityRepository(db)
-	facultyRepo := repositories.NewFacultyRepository(db)
-	departmentRepo := repositories.NewDepartmentRepository(db)
+	//Private API
+	//TODO middleware ekle
+	api := app.Group("/api")
+	routes.DiplomaRoutes(api)
+	routes.WalletRoutes(api)
 
-	tokenHelper := security.NewJWTHelper(
-		cfg.JWTConfig.JWTSecret,
-		cfg.JWTConfig.JWTExpireHours,
-	)
-
-	//Mock Services
-	//arweaveService := services.NewMockArweaveService("DEBUG_FAKE_ARWEAVE_TX")
-	//blockchainService := services.NewMockBlockchainService()
-
-	//Initialize services
-	arweaveService := services.NewArweaveService(cfg)
-	blockchainService := services.NewBlockChainService(cfg, contractRepo)
-	diplomaService := services.NewDiplomaService(arweaveService, blockchainService, diplomaRepo)
-	userService := services.NewUserService(userRepo, tokenHelper, uniRepo)
-	AuthMiddleware := middleware.NewAuthMiddleware(tokenHelper, userRepo)
-	uniService := services.NewUniversityService(uniRepo)
-	walletService := services.NewWalletService()
-	facultyService := services.NewFacultyService(facultyRepo)
-	departmentService := services.NewDepartmentService(departmentRepo)
-
-	//Initialize handlers
-	diplomaHandler := handlers.NewDiplomaHandler(diplomaService)
-	userHandler := handlers.NewUserHandler(userService, uniService)
-	walletHandler := handlers.NewWalletHandler(walletService)
-	facultyHandler := handlers.NewFacultyHandler(facultyService)
-	departmentHandler := handlers.NewDepartmentHandler(departmentService)
-
-	api := r.Group("/api/v1")
-	auth := api.Group("/auth")
-	diploma := api.Group("/diploma")
-	wallet := api.Group("/wallet")
-
-	//Public routes
-	routes.UserRoutes(auth, userHandler)
-	routes.UniversityRoutes(api, userHandler)
-	routes.PingRoutes(api)
-	routes.FacultyRoutes(api, facultyHandler)
-	routes.DepartmentRoutes(api, departmentHandler)
-
-	//Protected routes
-	diploma.Use(AuthMiddleware.Authorize())
-	routes.DiplomaRoutes(diploma, diplomaHandler)
-	routes.WalletRoutes(wallet, walletHandler)
-
-	r.Static("/public", "./public")
+	//r.Static("/public", "./public")
 	//Start server
-	log.Printf("Server running on port %s", cfg.Server.Port)
-	if err := r.Run(":" + cfg.Server.Port); err != nil {
+	log.Printf("Server running on port %d", port)
+	if err := app.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

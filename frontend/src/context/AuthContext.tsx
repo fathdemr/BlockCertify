@@ -1,93 +1,55 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import type { User } from '../types';
+import { authApi } from '../services/api';
 
-type Role = 'admin' | 'public';
-
-interface User {
-    email: string;
-    role: Role;
-    token?: string;
+interface AuthContextValue {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  isAdmin: boolean;
 }
 
-interface AuthContextType {
-    user: User | null;
-    login: (email: string, password: string) => Promise<void>;
-    register: (data: { firstName: string; lastName: string; email: string; universityID: string; password: string }) => Promise<void>;
-    logout: () => void;
-    isAuthenticated: boolean;
-    isAdmin: boolean;
-    loading: boolean;
-}
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const savedUser = localStorage.getItem('blockcertify_user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
-        }
-        setLoading(false);
-    }, []);
-
-    const login = async (email: string, password: string) => {
-        try {
-            const response = await api.post('/v1/auth/user/login', { email, password });
-            const { token, role } = response.data;
-            const newUser: User = { email, role, token }; // Note: User interface might need Update
-            setUser(newUser);
-            localStorage.setItem('blockcertify_user', JSON.stringify(newUser));
-        } catch (error: any) {
-            const message = error.response?.data?.message || 'Login failed';
-            throw new Error(message);
-        }
-    };
-
-    const register = async (data: { firstName: string; lastName: string; email: string; universityID: string; password: string }) => {
-        try {
-            await api.post('/v1/auth/user/register/admin', data);
-        } catch (error: any) {
-            const message = error.response?.data?.error || error.response?.data?.message || 'Registration failed';
-            throw new Error(message);
-        }
-    };
-
-    const logout = async () => {
-        try {
-            await api.post('/v1/auth/user/logout');
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            setUser(null);
-            localStorage.removeItem('blockcertify_user');
-            window.location.href = '/login';
-        }
-    };
-
-    return (
-        <AuthContext.Provider
-            value={{
-                user,
-                login,
-                register,
-                logout,
-                isAuthenticated: !!user,
-                isAdmin: user?.role === 'admin',
-                loading,
-            }}
-        >
-            {children}
-        </AuthContext.Provider>
-    );
-};
-
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
+  useEffect(() => {
+    const stored = localStorage.getItem('bc_user');
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem('bc_user');
+      }
     }
-    return context;
-};
+    setLoading(false);
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const res = await authApi.login(email, password);
+    const userData: User = res.data.user ?? res.data;
+    setUser(userData);
+    localStorage.setItem('bc_user', JSON.stringify(userData));
+  };
+
+  const logout = async () => {
+    await authApi.logout().catch(() => {});
+    setUser(null);
+    localStorage.removeItem('bc_user');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin' }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  return ctx;
+}

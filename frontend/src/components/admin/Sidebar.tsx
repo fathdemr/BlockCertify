@@ -1,81 +1,67 @@
-import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-    Upload,
-    ShieldCheck,
-    History,
-    LogOut,
-    LayoutDashboard,
-    Shield,
-    Wallet
-} from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, Upload, CheckCircle, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const Sidebar: React.FC = () => {
-    const { logout, user } = useAuth();
-    const navigate = useNavigate();
+const navItems = [
+  { icon: LayoutDashboard, label: 'Ana Sayfa', to: '/admin' },
+  { icon: Upload, label: 'Diploma Yükle', to: '/admin/yukle' },
+  { icon: CheckCircle, label: 'Diploma Doğrula', to: '/admin/dogrula' },
+];
 
-    const handleLogout = () => {
-        logout();
-        navigate('/');
-    };
+export default function Sidebar() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
-    const menuItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-        { icon: Upload, label: 'Upload Diploma', href: '/admin/upload' },
-        { icon: ShieldCheck, label: 'Verify Diploma', href: '/admin/verify' },
-        { icon: History, label: 'History / Logs', href: '/admin/history' },
-        { icon: Wallet, label: 'Wallets', href: '/admin/wallets' },
-    ];
+  const handleLogout = async () => {
+    await logout();
+    navigate('/giris');
+  };
 
-    return (
-        <aside className="w-64 bg-brand-dark border-r border-gray-800 flex flex-col h-screen sticky top-0">
-            <div className="p-6">
-                <div className="flex items-center gap-2 mb-8">
-                    <Shield className="h-8 w-8 text-brand-secondary" />
-                    <span className="text-xl font-display font-bold">Admin Panel</span>
-                </div>
+  return (
+    <aside className="w-[200px] min-h-screen bg-primary-container flex flex-col py-6 shrink-0">
+      <div className="px-5 mb-8">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-6 h-6 text-secondary-container shrink-0" />
+          <div>
+            <p className="text-white font-bold text-sm leading-tight">BlockCertify</p>
+            <p className="text-white/40 text-[10px] tracking-widest uppercase leading-tight">Blockchain Credentialing</p>
+          </div>
+        </div>
+      </div>
 
-                <nav className="space-y-2">
-                    {menuItems.map((item) => (
-                        <NavLink
-                            key={item.href}
-                            to={item.href}
-                            end
-                            className={({ isActive }) =>
-                                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
-                                    ? 'bg-brand-primary text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                }`
-                            }
-                        >
-                            <item.icon className="h-5 w-5" />
-                            <span className="font-medium">{item.label}</span>
-                        </NavLink>
-                    ))}
-                </nav>
-            </div>
+      <nav className="flex-1 px-3 space-y-1">
+        {navItems.map(({ icon: Icon, label, to }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/admin'}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
 
-            <div className="mt-auto p-6 border-t border-gray-800">
-                <div className="flex items-center gap-3 mb-6 px-4">
-                    <div className="w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-accent/30 flex items-center justify-center">
-                        <span className="text-brand-accent font-bold uppercase">{user?.email?.charAt(0) || 'A'}</span>
-                    </div>
-                    <div className="overflow-hidden">
-                        <p className="text-sm font-semibold text-white truncate">{user?.email}</p>
-                        <p className="text-xs text-gray-500 uppercase tracking-wider">{user?.role}</p>
-                    </div>
-                </div>
-                <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-xl transition-all"
-                >
-                    <LogOut className="h-5 w-5" />
-                    <span className="font-medium">Sign Out</span>
-                </button>
-            </div>
-        </aside>
-    );
-};
-
-export default Sidebar;
+      <div className="px-3 mt-4 space-y-1">
+        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-all">
+          <Settings className="w-4 h-4 shrink-0" />
+          Ayarlar
+        </button>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          Çıkış Yap
+        </button>
+      </div>
+    </aside>
+  );
+}

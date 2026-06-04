@@ -1,28 +1,19 @@
 package config
 
 import (
-	"errors"
+	"BlockCertify/internal/services/ArweaveService"
+	"BlockCertify/internal/services/BlockchainService"
 	"fmt"
-	"os"
-	"strconv"
+	"net"
+	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
-
-type Config struct {
-	Server     ServerConfig
-	Arweave    ArweaveConfig
-	Blockchain BlockChainConfig
-	JWTConfig  JWTConfig
-	Db         DatabaseConfig
-}
-
-type ServerConfig struct {
-	Port          string
-	UploadDir     string
-	MaxUploadSize int64
-}
 
 type ArweaveConfig struct {
 	WalletKey string
@@ -39,113 +30,110 @@ type BlockChainConfig struct {
 	MinBalance      string // in MATIC
 }
 
-type JWTConfig struct {
-	JWTExpireHours time.Duration
-	JWTSecret      string
-}
+var (
+	LocalIPAddress = GetBoundIP()
+	DB             *gorm.DB
+	Params         = viper.New()
+	RedisClient    *redis.Client
+	Arweave        *ArweaveService.ArweaveService
+	Blockchain     *BlockchainService.BlockchainService
+)
 
-type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-}
-
-func Load() (*Config, error) {
-	// Load .env if present (local dev). In Docker, env vars are injected by
-	// docker-compose and .env will not exist — that is perfectly fine.
-	if err := godotenv.Load(); err != nil {
-		var pathErr *os.PathError
-		if !errors.As(err, &pathErr) {
-			// Not a missing-file error — something genuinely wrong (parse error etc.)
-			return nil, fmt.Errorf("failed to load .env: %w", err)
-		}
-		// .env simply doesn't exist; continue using environment variables.
-	}
-
-	chainIDStr := getEnvOrDefault("POLYGON_CHAIN_ID", "80002")
-	chainID, err := strconv.Atoi(chainIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse POLYGON_CHAIN_ID from env var: %w", err)
-	}
-
-	jwtExpStr := os.Getenv("JWT_EXP_HOURS")
-	jwtExp, err := strconv.Atoi(jwtExpStr)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse JWT_EXP_HOURS from env var: %w", err)
-	}
-
-	cfg := &Config{
-		Server: ServerConfig{
-			Port:          getEnvOrDefault("PORT", "8080"),
-			UploadDir:     getEnvOrDefault("UPLOAD_DIR", "upload"),
-			MaxUploadSize: 10 << 20, // 10 MB
-		},
-		Arweave: ArweaveConfig{
-			WalletKey: os.Getenv("ARWEAVE_KEY"),
-			Host:      "arweave.net",
-			Port:      443,
-			Protocol:  "https",
-		},
-		Blockchain: BlockChainConfig{
-			RPCURL:          getEnvOrDefault("POLYGON_RPC_URL", "https://polygon-rpc.com"),
-			PrivateKey:      os.Getenv("PRIVATE_KEY"),
-			ContractAddress: os.Getenv("CONTRACT_ADDRESS"),
-			ChainID:         chainID,
-			MinBalance:      "0.03",
-		},
-		JWTConfig: JWTConfig{
-			JWTExpireHours: time.Duration(jwtExp),
-			JWTSecret:      os.Getenv("JWT_SECRET_KEY"),
-		},
-		Db: DatabaseConfig{
-			Host:     os.Getenv("APP_DB_HOST"),
-			Port:     os.Getenv("APP_DB_PORT"),
-			User:     os.Getenv("APP_DB_USERNAME"),
-			Password: os.Getenv("APP_DB_PASSWORD"),
-			Name:     os.Getenv("APP_DB_NAME"),
-		},
-	}
-
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("could not validate config: %w", err)
-	}
-	return cfg, nil
-}
-
-func (c *Config) Validate() error {
-	if c.Arweave.WalletKey == "" {
-		return fmt.Errorf("ARWEAVE_KEY is required")
-	}
-	if c.Blockchain.PrivateKey == "" {
-		return fmt.Errorf("PRIVATE_KEY is required")
-	}
-	if c.Blockchain.ContractAddress == "" {
-		return fmt.Errorf("CONTRACT_ADDRESS is required")
-	}
-	if c.Db.Host == "" {
-		return fmt.Errorf("APP_DB_HOST is required")
-	}
-	if c.Db.Port == "" {
-		return fmt.Errorf("APP_DB_PORT is required")
-	}
-	if c.Db.User == "" {
-		return fmt.Errorf("APP_DB_USERNAME is required")
-	}
-	if c.Db.Password == "" {
-		return fmt.Errorf("APP_DB_PASSWORD is required")
-	}
-	if c.Db.Name == "" {
-		return fmt.Errorf("APP_DB_NAME is required")
+func InitConfigFile(configPath string) error {
+	Params.AddConfigPath(configPath)
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	if err := Params.ReadInConfig(); err != nil {
+		return err
+	} else {
+		fmt.Println("Config file loaded")
 	}
 	return nil
 }
 
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+func GetBoundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		fmt.Println("GetBoundIP", err)
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(conn)
+	localAddr := conn.LocalAddr().String()
+	idx := strings.LastIndex(localAddr, ":")
+	return localAddr[0:idx]
+}
+
+func InitDB() error {
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		Params.GetString("db.live.host"),
+		Params.GetString("db.live.port"),
+		Params.GetString("db.live.user_name"),
+		Params.GetString("db.live.password"),
+		Params.GetString("db.live.db_name"),
+	)
+
+	if Params.GetString("environment") == "test" {
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			Params.GetString("db.test.host"),
+			Params.GetString("db.test.port"),
+			Params.GetString("db.test.user_name"),
+			Params.GetString("db.test.password"),
+			Params.GetString("db.test.db_name"),
+		)
 	}
 
-	return defaultValue
+	var err error
+	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		return err
+	} else {
+		fmt.Println("DB connected", dsn)
+
+		pgDB, _ := DB.DB()
+
+		// SetMaxIdleConns sets the maximum number of connections in the idle connection pool.
+		pgDB.SetMaxIdleConns(600)
+
+		// SetMaxOpenConns sets the maximum number of open connections to the database.
+		pgDB.SetMaxOpenConns(2000)
+
+		// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
+		pgDB.SetConnMaxLifetime(120 * time.Second)
+		pgDB.SetConnMaxIdleTime(120 * time.Second)
+	}
+	fmt.Println("Local Address:", LocalIPAddress)
+
+	if Params.GetString("environment") == "test" {
+		testRedisConf := redis.Options{
+			Addr: fmt.Sprintf("%s:%s", Params.GetString("redis.test.address"), Params.GetString("redis.test.port")),
+			//Password: Params.GetString("redis.test.password"),
+			DB:           Params.GetInt("redis.test.db"),
+			DialTimeout:  3 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 5 * time.Second,
+		}
+		fmt.Printf("Test Redis Config: %+v\n", testRedisConf)
+		RedisClient = redis.NewClient(&testRedisConf)
+		fmt.Println("connect to redis test")
+	} else {
+		RedisClient = redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%s", Params.GetString("redis.live.address"), Params.GetString("redis.live.port")),
+			//Password: Params.GetString("redis.live.password"),
+			DB:           Params.GetInt("redis.live.db"),
+			DialTimeout:  3 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 5 * time.Second,
+		})
+		fmt.Println("connect to redis live")
+	}
+
+	Arweave = ArweaveService.NewArweaveService(Params.GetString("arweave.walletKey"), Params.GetString("arweave.host"), Params.GetString("arweave.protocol"), Params.GetInt("arweave.port"))
+	Blockchain = BlockchainService.New(Params.GetString("polygon.rpcUrl"), Params.GetString("polygon.privateKey"), Params.GetString("polygon.contractAddress"), Params.GetString("polygon.min_balance"), Params.GetInt("polygon.chainID"))
+
+	return nil
 }

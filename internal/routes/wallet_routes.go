@@ -6,6 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func WalletRoutes(api *gin.RouterGroup, h *handlers.WalletHandler) {
-	api.POST("/upload-key-file", h.GetArweaveKeyFileJSON)
+func WalletRoutes(api *gin.RouterGroup) {
+	api.GET("/wallet/status", handlers.WalletStatus)
 }

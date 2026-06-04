@@ -6,12 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func DiplomaRoutes(diploma *gin.RouterGroup, d *handlers.DiplomaHandler) {
+func DiplomaRoutes(diploma *gin.RouterGroup) {
 
-	diploma.POST("/prepare", d.PrepareUpload)
-	diploma.POST("/confirm", d.ConfirmUpload)
-	diploma.POST("/verify", d.Verify)
-	diploma.GET("/records", d.GetDiplomaRecords)
-	diploma.GET("/records/:diplomaId", d.GetDiplomaById)
+	diploma.POST("/upload", handlers.Upload)
+	diploma.POST("/verify", handlers.Verify)
+	diploma.GET("/records", handlers.GetDiplomaRecords)
+	diploma.GET("/records/:diplomaId", handlers.GetDiplomaById)
 
 }

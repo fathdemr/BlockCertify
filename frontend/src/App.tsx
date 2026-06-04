@@ -4,60 +4,63 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
-import Verify from './pages/Verify';
-import About from './pages/About';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Verify from './pages/Verify';
 import AdminLayout from './layouts/AdminLayout';
-
-// Admin Pages
 import Dashboard from './pages/admin/Dashboard';
 import Upload from './pages/admin/Upload';
 import AdminVerify from './pages/admin/Verify';
 import History from './pages/admin/History';
-import Wallets from './pages/admin/Wallets';
 
-function App() {
+function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <>
+      <Navbar />
+      <main>{children}</main>
+      <Footer />
+    </>
+  );
+}
+
+export default function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="flex flex-col min-h-screen">
-          <Navbar />
-          <main className="flex-grow">
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/verify" element={<Verify />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+        <Routes>
+          {/* Landing */}
+          <Route
+            path="/"
+            element={
+              <PublicLayout>
+                <Home />
+              </PublicLayout>
+            }
+          />
 
-              {/* Protected Admin Routes */}
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <AdminLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="upload" element={<Upload />} />
-                <Route path="verify" element={<AdminVerify />} />
-                <Route path="history" element={<History />} />
-                <Route path="wallets" element={<Wallets />} />
-              </Route>
-            </Routes>
-          </main>
-          {/* Hide Footer on Admin Pages */}
-          <Routes>
-            <Route path="/admin/*" element={null} />
-            <Route path="*" element={<Footer />} />
-          </Routes>
-        </div>
+          {/* Public verify */}
+          <Route path="/dogrula" element={<Verify />} />
+
+          {/* Auth pages (no navbar/footer) */}
+          <Route path="/giris" element={<Login />} />
+          <Route path="/kaydol" element={<Register />} />
+
+          {/* Protected admin */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="yukle" element={<Upload />} />
+            <Route path="dogrula" element={<AdminVerify />} />
+            <Route path="gecmis" element={<History />} />
+          </Route>
+        </Routes>
       </Router>
     </AuthProvider>
   );
 }
-
-export default App;

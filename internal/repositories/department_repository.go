@@ -1,13 +1,6 @@
 package repositories
 
-import (
-	"BlockCertify/internal/models"
-	"log/slog"
-
-	"github.com/gofrs/uuid/v5"
-	"gorm.io/gorm"
-)
-
+/*
 type DepartmentRepository interface {
 	GetDepartmentByID(facultyID uuid.UUID) ([]models.Department, error)
 }
@@ -31,3 +24,6 @@ func (r *departmentRepository) GetDepartmentByID(facultyID uuid.UUID) ([]models.
 
 	return departments, nil
 }
+
+
+*/
