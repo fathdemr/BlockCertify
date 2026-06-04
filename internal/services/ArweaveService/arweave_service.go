@@ -26,7 +26,7 @@ func NewArweaveService(WalletKey, Host, Protocol string, Port int) *ArweaveServi
 
 	client := goar.NewClient("https://arweave.net")
 
-	wallet, err := goar.NewWalletFromPath("./arweave_keyfile.json", "https://arweave.net")
+	wallet, err := goar.NewWallet([]byte(WalletKey), "https://arweave.net")
 	if err != nil {
 		slog.Error("Failed to create Arweave wallet", "err", err)
 	}
