@@ -1,0 +1,26 @@
+{
+    "schemes": [
+        "https",
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API for BlockCertify. Önce /exapi/auth/login ile token alın, ardından sağ üstteki Authorize butonuna \"Bearer {token}\" girin.",
+        "title": "BlockCertify API",
+        "contact": {
+            "name": "BlockCertify Team"
+        },
+        "version": "1.0"
+    },
+    "host": "api.blockcertify.app",
+    "basePath": "/",
+    "paths": {},
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Bearer {token} formatında girin",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

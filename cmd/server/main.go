@@ -5,9 +5,14 @@ import (
 	"BlockCertify/internal/logger"
 	"BlockCertify/internal/routes"
 	"context"
-	"fmt"
-	"log"
+	"errors"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -16,62 +21,53 @@ import (
 func main() {
 	logger.Init()
 
-	current, _ := os.Getwd()
-	fmt.Println(current)
-
 	if err := config.InitConfigFile("./internal"); err != nil {
 		panic(err)
 	}
 	if err := config.InitDB(); err != nil {
 		panic(err)
 	}
-	rediPingStatus := config.RedisClient.Ping(context.Background())
-	if rediPingStatus.Err() != nil {
-		panic(rediPingStatus.Err())
+	if err := config.RedisClient.Ping(context.Background()).Err(); err != nil {
+		panic(err)
 	}
 
 	app := gin.New()
 
 	app.ForwardedByClientIP = true
-	// Cors alayına hak veriyor. sonra kaldıracağız.
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true
 	corsConfig.AllowHeaders = []string{
-		"Origin",           // İstek yapılan kaynağı (domain, port) belirtir.
-		"Authorization",    // Kimlik doğrulama bilgileri taşır (Bearer Token, Basic Auth vb.).
-		"Content-Type",     // İstek veya yanıt içeriğinin türünü belirtir (application/json, text/html vb.).
-		"Bilet",            // Özel bir kimlik doğrulama veya yetkilendirme başlığı olabilir.
-		"ApiKey",           // API erişimi için kullanılan anahtar.
-		"ApiSecret",        // API erişimi için gizli anahtar.
-		"X-Forwarded-For",  // İstek yapan istemcinin gerçek IP adresini taşır (proxy arkasındaysa).
-		"X-Real-Ip",        // Genellikle istemcinin gerçek IP adresini belirlemek için kullanılır.
-		"User-Agent",       // İstek yapan cihazın veya tarayıcının bilgisini taşır (örn. Chrome, Postman).
-		"Referer",          // Kullanıcının hangi sayfadan geldiğini gösterir.
-		"Accept-Language",  // İstemcinin tercih ettiği dil ayarlarını içerir.
-		"Accept-Encoding",  // Sunucunun hangi sıkıştırma formatlarını (gzip, deflate vb.) desteklediğini gösterir.
-		"Cache-Control",    // Önbellekleme politikasını belirtir.
-		"Connection",       // Bağlantının nasıl yönetileceğini belirler (keep-alive, close vb.).
-		"DNT",              // "Do Not Track" talebi, kullanıcının izlenmek istemediğini belirtir.
-		"X-Requested-With", // İsteğin AJAX olup olmadığını belirlemek için kullanılır.
-		"Sec-Fetch-Site",   // İsteğin hangi siteden yapıldığını gösterir (same-origin, cross-site vb.).
-		"Sec-Fetch-Mode",   // İsteğin türünü belirtir (cors, no-cors vb.).
-		"Sec-Fetch-Dest",   // Kaynağın hangi amaçla yüklendiğini gösterir (document, script vb.).
-		"X-Device-Id",      // İstemcinin cihaz ID’sini belirtmek için özel bir başlık.
-		"X-Device-Model",   // İstemcinin cihaz modelini belirtmek için özel bir başlık.
-		"X-OS-Version",     // İşletim sistemi sürümünü belirten özel bir başlık.
-		"X-Client-Version", // Mobil uygulama istemcisinin sürümünü belirten başlık.
-		"X-Platform",       // İstemcinin hangi platformdan geldiğini belirtir (iOS, Android, Web).
-		"X-Timezone",       // İstemcinin bulunduğu zaman dilimini belirtir.
-		"X-Session-Id",     // Kullanıcının oturum bilgisini taşır.
-		"X-App-Id",         // Mobil veya web uygulamasının kimliğini belirtir.
+		"Origin",
+		"Authorization",
+		"Content-Type",
+		"Bilet",
+		"ApiKey",
+		"ApiSecret",
+		"X-Forwarded-For",
+		"X-Real-Ip",
+		"User-Agent",
+		"Referer",
+		"Accept-Language",
+		"Accept-Encoding",
+		"Cache-Control",
+		"Connection",
+		"DNT",
+		"X-Requested-With",
+		"Sec-Fetch-Site",
+		"Sec-Fetch-Mode",
+		"Sec-Fetch-Dest",
+		"X-Device-Id",
+		"X-Device-Model",
+		"X-OS-Version",
+		"X-Client-Version",
+		"X-Platform",
+		"X-Timezone",
+		"X-Session-Id",
+		"X-App-Id",
 	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
 	app.Use(cors.New(corsConfig))
 
-	port := 8080
-
-	//Public API
-	//TODO middleware ekle
 	exapi := app.Group("/exapi")
 	routes.UserRoutes(exapi)
 	routes.UniversityRoutes(exapi)
@@ -79,16 +75,58 @@ func main() {
 	routes.FacultyRoutes(exapi)
 	routes.DepartmentRoutes(exapi)
 
-	//Private API
-	//TODO middleware ekle
 	api := app.Group("/api")
 	routes.DiplomaRoutes(api)
 	routes.WalletRoutes(api)
 
-	//r.Static("/public", "./public")
-	//Start server
-	log.Printf("Server running on port %d", port)
-	if err := app.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+	// ── 4. HTTP Server ─────────────────────────────────────────────────────────
+	port := config.Params.GetString("app.port")
+	if port == "" {
+		port = "8080"
 	}
+	if !strings.HasPrefix(port, ":") {
+		port = ":" + port
+	}
+
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           app,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	go func() {
+		slog.Info("✅ sunucu başlatıldı", "addr", "http://localhost"+port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("❌ sunucu hatası", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// ── 5. Graceful Shutdown ───────────────────────────────────────────────────
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	slog.Info("🔄 sunucu kapatılıyor...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("❌ graceful shutdown başarısız", "error", err)
+	}
+
+	if sqlDB, err := config.DB.DB(); err == nil {
+		if err := sqlDB.Close(); err != nil {
+			slog.Error("❌ postgres kapatılamadı", "error", err)
+		}
+	}
+	if config.RedisClient != nil {
+		if err := config.RedisClient.Close(); err != nil {
+			slog.Error("❌ redis kapatılamadı", "error", err)
+		}
+	}
+
+	slog.Info("✅ sunucu düzgünce kapatıldı")
 }

@@ -1,0 +1,20 @@
+basePath: /
+host: api.blockcertify.app
+info:
+  contact:
+    name: BlockCertify Team
+  description: REST API for BlockCertify. Önce /exapi/auth/login ile token alın, ardından
+    sağ üstteki Authorize butonuna "Bearer {token}" girin.
+  title: BlockCertify API
+  version: "1.0"
+paths: {}
+schemes:
+- https
+- http
+securityDefinitions:
+  BearerAuth:
+    description: Bearer {token} formatında girin
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
