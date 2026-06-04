@@ -3,6 +3,7 @@ package config
 import (
 	"BlockCertify/internal/services/ArweaveService"
 	"BlockCertify/internal/services/BlockchainService"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -40,11 +41,21 @@ var (
 )
 
 func InitConfigFile(configPath string) error {
+	Params.SetConfigName("config")
+	Params.SetConfigType("yaml")
 	Params.AddConfigPath(configPath)
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
+
+	// Env var desteği: DB_LIVE_HOST → db.live.host
+	Params.AutomaticEnv()
+	Params.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	if err := Params.ReadInConfig(); err != nil {
-		return err
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
+			fmt.Println("Config file not found, using environment variables")
+		} else {
+			return err
+		}
 	} else {
 		fmt.Println("Config file loaded")
 	}
