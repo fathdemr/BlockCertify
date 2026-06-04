@@ -133,8 +133,8 @@ func InitDB() error {
 		fmt.Println("connect to redis test")
 	} else {
 		RedisClient = redis.NewClient(&redis.Options{
-			Addr: fmt.Sprintf("%s:%s", Params.GetString("redis.live.address"), Params.GetString("redis.live.port")),
-			//Password: Params.GetString("redis.live.password"),
+			Addr:         fmt.Sprintf("%s:%s", Params.GetString("redis.live.address"), Params.GetString("redis.live.port")),
+			Password:     Params.GetString("redis.live.password"),
 			DB:           Params.GetInt("redis.live.db"),
 			DialTimeout:  3 * time.Second,
 			ReadTimeout:  3 * time.Second,
