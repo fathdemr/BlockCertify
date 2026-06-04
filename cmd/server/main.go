@@ -3,6 +3,7 @@ package main
 import (
 	"BlockCertify/internal/config"
 	"BlockCertify/internal/logger"
+	"BlockCertify/internal/models"
 	"BlockCertify/internal/routes"
 	"context"
 	"errors"
@@ -30,6 +31,19 @@ func main() {
 	if err := config.RedisClient.Ping(context.Background()).Err(); err != nil {
 		panic(err)
 	}
+	if err := config.DB.AutoMigrate(
+		&models.User{},
+		&models.Universities{},
+		&models.Faculties{},
+		&models.Department{},
+		&models.Admin{},
+		&models.Student{},
+		&models.Diploma{},
+		&models.DiplomaMetaData{},
+	); err != nil {
+		panic(err)
+	}
+	slog.Info("✅ migration tamamlandı")
 
 	app := gin.New()
 

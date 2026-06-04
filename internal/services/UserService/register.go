@@ -1,12 +1,10 @@
 package UserService
 
 import (
-	"BlockCertify/internal/config"
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
 	"BlockCertify/internal/models"
 	apperrors "BlockCertify/internal/pkg/errors"
-	"BlockCertify/internal/services/UniversityService"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,8 +17,6 @@ import (
 var ErrToManyAttempts = errors.New("to many attempts")
 
 func (s *UserService) Register(req dto.RegisterRequest) error {
-
-	universityService := UniversityService.New(config.DB)
 
 	redisKey := fmt.Sprintf("%s:register:attempt", req.Email)
 	registerAttemptDuration := time.Duration(1) * time.Minute
@@ -60,12 +56,6 @@ func (s *UserService) Register(req dto.RegisterRequest) error {
 		return fmt.Errorf("Failed to hash password: %w", err)
 	}
 
-	uni, err := universityService.GetUniversityByID(req.UniversityID)
-	if err != nil {
-		slog.Error("Failed to get university by ID: %v", err)
-		return apperrors.New(apperrors.ErrUniversityNotFound, "University not found", err)
-	}
-
 	tx := s.CreateTransaction()
 	defer tx.Rollback()
 
@@ -81,17 +71,6 @@ func (s *UserService) Register(req dto.RegisterRequest) error {
 	if err := tx.Create(&user).Error; err != nil {
 		slog.Error("Failed to create user: %v", err)
 		return apperrors.New(apperrors.ErrUserCreationFailed, "User creation failed", err)
-	}
-
-	admin := models.Admin{
-		ID:           uuid.Must(uuid.NewV7()),
-		UserID:       user.ID,
-		UniversityID: uni.ID,
-	}
-
-	if err := tx.Create(&admin).Error; err != nil {
-		slog.Error("Failed to create admin: %v", err)
-		return apperrors.New(apperrors.ErrAdminCreationFailed, "Admin creation failed", err)
 	}
 
 	//If Everything is OK then delete the caches
