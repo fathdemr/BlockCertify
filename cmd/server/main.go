@@ -85,7 +85,7 @@ func main() {
 		port = "8080"
 	}
 	if !strings.HasPrefix(port, ":") {
-		port = ":" + port
+		port = "0.0.0.0:" + port
 	}
 
 	srv := &http.Server{
