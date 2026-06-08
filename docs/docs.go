@@ -30,7 +30,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "api.blockcertify.app",
+	Host:             "api.blockcertify.uk",
 	BasePath:         "/",
 	Schemes:          []string{"https", "http"},
 	Title:            "BlockCertify API",

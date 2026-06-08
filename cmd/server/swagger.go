@@ -6,7 +6,7 @@ package main
 
 // @contact.name BlockCertify Team
 
-// @host     api.blockcertify.app
+// @host     api.blockcertify.uk
 // @BasePath /
 // @schemes  https http
 

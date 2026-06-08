@@ -49,7 +49,12 @@ func main() {
 
 	app.ForwardedByClientIP = true
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowOrigins = []string{
+		"https://blockcertify.uk",
+		"https://www.blockcertify.uk",
+		"http://localhost:3000",
+		"http://localhost:5173",
+	}
 	corsConfig.AllowHeaders = []string{
 		"Origin",
 		"Authorization",
