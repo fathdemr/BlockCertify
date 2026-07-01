@@ -11,6 +11,7 @@ dist/
 *.dylib
 *.test
 *.out
+server
 
 ############################
 # Go workspace / modules

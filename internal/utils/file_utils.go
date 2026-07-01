@@ -38,7 +38,23 @@ func (fm *FileManager) SaveFile(src io.Reader, filename string) (string, error) 
 }
 
 func (fm *FileManager) SaveUploadedFile(part *multipart.Part, filename string) (string, error) {
-	return fm.SaveFile(part, filename)
+	ext := filepath.Ext(filename)
+	tmpFile, err := os.CreateTemp(fm.uploadDir, "diploma-*"+ext)
+	if err != nil {
+		// fallback: sistem temp dizini
+		tmpFile, err = os.CreateTemp("", "diploma-*"+ext)
+		if err != nil {
+			return "", err
+		}
+	}
+	defer tmpFile.Close()
+
+	if _, err := io.Copy(tmpFile, part); err != nil {
+		os.Remove(tmpFile.Name())
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
 }
 
 func (fm *FileManager) DeleteFile(filepath string) error {

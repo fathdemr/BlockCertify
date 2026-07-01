@@ -55,6 +55,7 @@ func main() {
 		"http://localhost:3000",
 		"http://localhost:5173",
 	}
+	corsConfig.AllowCredentials = true
 	corsConfig.AllowHeaders = []string{
 		"Origin",
 		"Authorization",
@@ -86,6 +87,8 @@ func main() {
 	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}
 	app.Use(cors.New(corsConfig))
+
+	routes.HealthRoutes(app)
 
 	exapi := app.Group("/exapi")
 	routes.UserRoutes(exapi)
