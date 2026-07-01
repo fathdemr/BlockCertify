@@ -24,7 +24,7 @@ import (
 // The backend uses its own platform keys (Arweave + Polygon) — no MetaMask required.
 func Upload(c *gin.Context) {
 
-	fileManager := utils.NewFileManager("uploads")
+	fileManager := utils.NewFileManager("/tmp/uploads")
 	diplomaService := DiplomaService.New(config.DB)
 	diplomaService.UseBlockchainService(config.Blockchain)
 	diplomaService.UseArweaveService(config.Arweave)
@@ -123,7 +123,7 @@ func Upload(c *gin.Context) {
 // the diploma hash and Arweave tx ID for the frontend to sign on Polygon via MetaMask.
 func PrepareUpload(c *gin.Context) {
 
-	fileManager := utils.NewFileManager("uploads")
+	fileManager := utils.NewFileManager("/tmp/uploads")
 	diplomaService := DiplomaService.New(config.DB)
 	diplomaService.UseBlockchainService(config.Blockchain)
 	diplomaService.UseArweaveService(config.Arweave)
@@ -288,19 +288,9 @@ func Verify(c *gin.Context) {
 		return
 	}
 
-	// Verify diploma
 	response, err := diplomaService.Verify(req)
 	if err != nil {
-		appErr, ok := err.(*apperrors.AppError)
-		if ok {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": appErr.Message,
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to verify diploma",
-			})
-		}
+		c.JSON(http.StatusOK, dto.VerifyResponse{Verified: false, DiplomaID: req.DiplomaID})
 		return
 	}
 
@@ -351,9 +341,15 @@ func GetDiplomaById(c *gin.Context) {
 
 func GetDiplomaRecords(c *gin.Context) {
 
+	email, err := extractEmailFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	diplomaService := DiplomaService.New(config.DB)
 
-	ch := diplomaService.GetAllDiplomaFromDatabase()
+	ch := diplomaService.GetDiplomasByEmail(email)
 
 	var records []map[string]interface{}
 	for diploma := range ch {

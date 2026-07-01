@@ -2,6 +2,7 @@ package ArweaveService
 
 import (
 	apperrors "BlockCertify/internal/pkg/errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"math/big"
@@ -43,6 +44,10 @@ func NewArweaveService(WalletKey, Host, Protocol string, Port int) *ArweaveServi
 }
 
 func (s *ArweaveService) Upload(filePath, fileHash string) (string, error) {
+
+	if s.wallet == nil {
+		return "", apperrors.New(apperrors.ErrArweaveUploadFailed, "Arweave wallet not initialized — check walletKey in config", nil)
+	}
 
 	// Read file
 	data, err := os.ReadFile(filePath)
@@ -98,6 +103,9 @@ func (s *ArweaveService) GetStatus() (address, balance string) {
 }
 
 func (s *ArweaveService) checkBalanceForData(data []byte) error {
+	if s.wallet == nil {
+		return fmt.Errorf("arweave wallet not initialized")
+	}
 	balance, err := s.client.GetWalletBalance(s.wallet.Signer.Address)
 	if err != nil {
 		slog.Error("Failed to get wallet balance", "err", err)

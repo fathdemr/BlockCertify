@@ -19,6 +19,7 @@ func (s *UserService) CreateToken(user *models.User) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
 	Claims := make(jwt.MapClaims)
 	Claims["id"] = user.ID
+	Claims["email"] = user.Email
 	Claims["Type"] = "Profile"
 	Claims["Name"] = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
 	AppProfileTokenHour := s.params.GetUint64("crypto.token_expire_duration_hour")

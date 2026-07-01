@@ -260,12 +260,6 @@ func (s *DiplomaService) Verify(req dto.VerifyDiplomaRequest) (dto.VerifyRespons
 		response.DiplomaID = diplomaID
 	}
 
-	if !response.Verified {
-		return dto.VerifyResponse{
-			Verified: false,
-		}, fmt.Errorf("diploma not found")
-	}
-
 	return response, nil
 }
 

@@ -1,5 +1,6 @@
 package dto
 
 type VerifyDiplomaRequest struct {
-	DiplomaID string `json:"DiplomaID"`
+	DiplomaID string `json:"diplomaId"`
+	TxHash    string `json:"tx_hash"`
 }
