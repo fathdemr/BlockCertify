@@ -9,43 +9,50 @@ import (
 	"BlockCertify/internal/utils"
 	"errors"
 	"io"
-	"log"
-	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 )
 
-// Upload handles the full diploma issuance flow in a single request.
-// The backend uses its own platform keys (Arweave + Polygon) — no MetaMask required.
-func Upload(c *gin.Context) {
+// maxUploadBytes caps diploma upload requests; every uploaded byte is paid for
+// on Arweave, so oversized files are rejected before any processing.
+const maxUploadBytes = 25 << 20 // 25 MB
 
+// parsedDiplomaUpload is the result of reading a multipart diploma request.
+type parsedDiplomaUpload struct {
+	FilePath string
+	Hash     string
+	Meta     dto.DiplomaMetadataRequest
+	Cleanup  func()
+}
+
+// parseDiplomaUpload reads the multipart body (PDF + metadata fields), saves the
+// file to a temp location and hashes it. On failure it writes the HTTP error
+// response itself and returns ok=false. Callers must defer result.Cleanup().
+func parseDiplomaUpload(c *gin.Context) (parsedDiplomaUpload, bool) {
+
+	result := parsedDiplomaUpload{Cleanup: func() {}}
 	fileManager := utils.NewFileManager("/tmp/uploads")
-	diplomaService := DiplomaService.New(config.DB)
-	diplomaService.UseBlockchainService(config.Blockchain)
-	diplomaService.UseArweaveService(config.Arweave)
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes)
 
 	contentType := c.GetHeader("Content-Type")
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart/form-data required"})
-		return
+		return result, false
 	}
 
 	reader, err := c.Request.MultipartReader()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid multipart request", "details": err.Error()})
-		return
+		return result, false
 	}
-
-	var (
-		filePath    string
-		diplomaHash string
-		reqMeta     = dto.DiplomaMetadataRequest{}
-	)
 
 	for {
 		part, err := reader.NextPart()
@@ -53,65 +60,100 @@ func Upload(c *gin.Context) {
 			break
 		}
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read multipart data", "details": err.Error()})
-			return
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), "request body too large") {
+				status = http.StatusRequestEntityTooLarge
+			}
+			c.JSON(status, gin.H{"error": "Failed to read multipart data", "details": err.Error()})
+			return result, false
 		}
 
 		switch part.FormName() {
 		case "diploma":
 			if !strings.HasSuffix(strings.ToLower(part.FileName()), ".pdf") {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Only PDF files are allowed"})
-				return
+				return result, false
 			}
-			filePath, err = fileManager.SaveUploadedFile(part, filepath.Base(part.FileName()))
+			filePath, err := fileManager.SaveUploadedFile(part, filepath.Base(part.FileName()))
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file", "details": err.Error()})
-				return
+				return result, false
 			}
-			defer fileManager.DeleteFile(filePath)
-			diplomaHash, err = utils.HashFile(filePath)
+			result.FilePath = filePath
+			result.Cleanup = func() { fileManager.DeleteFile(filePath) }
+
+			result.Hash, err = utils.HashFile(filePath)
 			if err != nil {
+				result.Cleanup()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash file", "details": err.Error()})
-				return
+				return result, false
 			}
 		case "firstName":
-			reqMeta.FirstName = readPartValue(part)
+			result.Meta.FirstName = readPartValue(part)
 		case "lastName":
-			reqMeta.LastName = readPartValue(part)
+			result.Meta.LastName = readPartValue(part)
 		case "email":
-			reqMeta.Email = readPartValue(part)
+			result.Meta.Email = readPartValue(part)
 		case "university":
-			reqMeta.University = readPartValue(part)
+			result.Meta.University = readPartValue(part)
 		case "faculty":
-			reqMeta.Faculty = readPartValue(part)
+			result.Meta.Faculty = readPartValue(part)
 		case "department":
-			reqMeta.Department = readPartValue(part)
+			result.Meta.Department = readPartValue(part)
 		case "graduationYear":
-			reqMeta.GraduationYear = helper.AtoiSafe(readPartValue(part))
+			result.Meta.GraduationYear = helper.AtoiSafe(readPartValue(part))
 		case "studentNumber":
-			reqMeta.StudentNumber = readPartValue(part)
+			result.Meta.StudentNumber = readPartValue(part)
 		case "nationality":
-			reqMeta.Nationality = readPartValue(part)
+			result.Meta.Nationality = readPartValue(part)
 		}
 	}
 
-	if err := validateUploadMetadata(reqMeta); err != nil {
+	if result.FilePath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "diploma file is required"})
+		return result, false
+	}
+
+	if err := validateUploadMetadata(result.Meta); err != nil {
+		result.Cleanup()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata", "details": err.Error()})
+		return result, false
+	}
+
+	return result, true
+}
+
+// writeServiceError maps service errors onto a JSON error response.
+func writeServiceError(c *gin.Context, err error) {
+	var appErr *apperrors.AppError
+	if errors.As(err, &appErr) {
+		errDetails := ""
+		if appErr.Err != nil {
+			errDetails = appErr.Err.Error()
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": appErr.Message, "details": errDetails, "code": appErr.Code})
 		return
 	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+}
 
-	response, err := diplomaService.Upload(filePath, diplomaHash, reqMeta)
+// Upload handles the full diploma issuance flow in a single request.
+// The backend uses its own platform keys (Arweave + Polygon) — no MetaMask required.
+func Upload(c *gin.Context) {
+
+	diplomaService := DiplomaService.New(config.DB)
+	diplomaService.UseBlockchainService(config.Blockchain)
+	diplomaService.UseArweaveService(config.Arweave)
+
+	parsed, ok := parseDiplomaUpload(c)
+	if !ok {
+		return
+	}
+	defer parsed.Cleanup()
+
+	response, err := diplomaService.Upload(parsed.FilePath, parsed.Hash, parsed.Meta)
 	if err != nil {
-		appErr, ok := err.(*apperrors.AppError)
-		if ok {
-			errDetails := ""
-			if appErr.Err != nil {
-				errDetails = appErr.Err.Error()
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": appErr.Message, "details": errDetails, "code": appErr.Code})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
+		writeServiceError(c, err)
 		return
 	}
 
@@ -123,126 +165,19 @@ func Upload(c *gin.Context) {
 // the diploma hash and Arweave tx ID for the frontend to sign on Polygon via MetaMask.
 func PrepareUpload(c *gin.Context) {
 
-	fileManager := utils.NewFileManager("/tmp/uploads")
 	diplomaService := DiplomaService.New(config.DB)
 	diplomaService.UseBlockchainService(config.Blockchain)
 	diplomaService.UseArweaveService(config.Arweave)
 
-	contentType := c.GetHeader("Content-Type")
-	if !strings.HasPrefix(contentType, "multipart/form-data") {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid content type",
-			"details": "multipart/form-data required",
-		})
+	parsed, ok := parseDiplomaUpload(c)
+	if !ok {
 		return
 	}
+	defer parsed.Cleanup()
 
-	reader, err := c.Request.MultipartReader()
+	response, err := diplomaService.PrepareUpload(parsed.FilePath, parsed.Hash, parsed.Meta)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid multipart request",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	var (
-		filePath    string
-		diplomaHash string
-		reqMeta     = dto.DiplomaMetadataRequest{}
-	)
-
-	for {
-		part, err := reader.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   "Failed to read multipart data",
-				"details": err.Error(),
-			})
-			return
-		}
-
-		switch part.FormName() {
-
-		case "diploma":
-			if !strings.HasSuffix(strings.ToLower(part.FileName()), ".pdf") {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"error":   "Invalid file type",
-					"details": "Only PDF files are allowed",
-				})
-				return
-			}
-
-			filePath, err = fileManager.SaveUploadedFile(part, filepath.Base(part.FileName()))
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error":   "Failed to save file",
-					"details": err.Error(),
-				})
-				return
-			}
-			defer fileManager.DeleteFile(filePath)
-
-			log.Println("Hashing diploma...")
-			diplomaHash, err = utils.HashFile(filePath)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error":   "Failed to hash file",
-					"details": err.Error(),
-				})
-				return
-			}
-
-		case "firstName":
-			reqMeta.FirstName = readPartValue(part)
-		case "lastName":
-			reqMeta.LastName = readPartValue(part)
-		case "email":
-			reqMeta.Email = readPartValue(part)
-		case "university":
-			reqMeta.University = readPartValue(part)
-		case "faculty":
-			reqMeta.Faculty = readPartValue(part)
-		case "department":
-			reqMeta.Department = readPartValue(part)
-		case "graduationYear":
-			reqMeta.GraduationYear = helper.AtoiSafe(readPartValue(part))
-		case "studentNumber":
-			reqMeta.StudentNumber = readPartValue(part)
-		case "nationality":
-			reqMeta.Nationality = readPartValue(part)
-		}
-	}
-
-	if err := validateUploadMetadata(reqMeta); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid metadata",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	response, err := diplomaService.PrepareUpload(filePath, diplomaHash, reqMeta)
-	if err != nil {
-		appErr, ok := err.(*apperrors.AppError)
-		if ok {
-			errDetails := ""
-			if appErr.Err != nil {
-				errDetails = appErr.Err.Error()
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   appErr.Message,
-				"details": errDetails,
-				"code":    appErr.Code,
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
+		writeServiceError(c, err)
 		return
 	}
 
@@ -250,10 +185,12 @@ func PrepareUpload(c *gin.Context) {
 }
 
 // ConfirmUpload handles the second phase of diploma issuance.
-// It receives the Polygon tx hash (signed by MetaMask) and saves the diploma record to the DB.
+// It receives the Polygon tx hash (signed by MetaMask), verifies the diploma
+// on-chain, and saves the record to the DB.
 func ConfirmUpload(c *gin.Context) {
 
 	diplomaService := DiplomaService.New(config.DB)
+	diplomaService.UseBlockchainService(config.Blockchain)
 
 	var req dto.ConfirmUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -266,18 +203,21 @@ func ConfirmUpload(c *gin.Context) {
 
 	response, err := diplomaService.ConfirmUpload(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		writeServiceError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
+// Verify checks a diploma against the DB and the Polygon contract.
+// verified=false with HTTP 200 means the diploma could not be validated;
+// HTTP 502 means verification infrastructure is unavailable — the two cases
+// must not be conflated.
 func Verify(c *gin.Context) {
 
 	diplomaService := DiplomaService.New(config.DB)
+	diplomaService.UseBlockchainService(config.Blockchain)
 
 	var req dto.VerifyDiplomaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -290,7 +230,11 @@ func Verify(c *gin.Context) {
 
 	response, err := diplomaService.Verify(req)
 	if err != nil {
-		c.JSON(http.StatusOK, dto.VerifyResponse{Verified: false, DiplomaID: req.DiplomaID})
+		slog.Error("diploma verification failed", "diplomaID", req.DiplomaID, "err", err)
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error":     "Verification is temporarily unavailable",
+			"diplomaID": req.DiplomaID,
+		})
 		return
 	}
 
@@ -307,16 +251,23 @@ func GetDiplomaById(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid Diploma Id",
 		})
+		return
 	}
 
 	slog.Info("stream diploma request", "publicID", publicID)
 
 	arweaveUrl := diplomaService.GetArweaveUrlByDiplomaID(publicID)
+	if arweaveUrl == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Diploma not found",
+		})
+		return
+	}
 
 	resp, err := http.Get(arweaveUrl)
 	if err != nil {
 		slog.Error("Failed to fetch diploma", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusBadGateway, gin.H{
 			"error": "Failed to fetch diploma",
 		})
 		return
@@ -328,6 +279,7 @@ func GetDiplomaById(c *gin.Context) {
 		c.JSON(resp.StatusCode, gin.H{
 			"error": "file not found",
 		})
+		return
 	}
 
 	c.Header("Content-Type", "application/pdf")
