@@ -11,7 +11,7 @@ dist/
 *.dylib
 *.test
 *.out
-server
+/server
 
 ############################
 # Go workspace / modules
@@ -72,7 +72,7 @@ arweave_keyfile.json
 
 contractABI.json
 
-main
+/main
 
 deploy.sh
 
@@ -81,3 +81,13 @@ default.conf
 data/
 
 internal/config.yaml
+/migrate
+
+# Redis dumps
+*.rdb
+
+# Office temp files
+~$*
+
+# Private keys
+*.pem
