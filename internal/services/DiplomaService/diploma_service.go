@@ -7,6 +7,7 @@ import (
 	apperrors "BlockCertify/internal/pkg/errors"
 	"BlockCertify/internal/services/ArweaveService"
 	"BlockCertify/internal/services/BlockchainService"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -171,6 +172,21 @@ func (s *DiplomaService) ConfirmUpload(req dto.ConfirmUploadRequest) (*dto.Uploa
 
 	slog.Info("Confirming diploma upload", "polygonTxHash", req.PolygonTxHash)
 
+	// Don't trust the client: the diploma hash must actually be registered
+	// on-chain and point to the claimed Arweave transaction before we persist it.
+	if s.Blockchain != nil {
+		exists, onChainArweaveTxID, err := s.Blockchain.VerifyDiploma(req.DiplomaHash)
+		if err != nil {
+			return nil, apperrors.New(apperrors.ErrBlockchainFailed, "Failed to verify diploma on-chain", err)
+		}
+		if !exists {
+			return nil, apperrors.New(apperrors.ErrVerificationFailed, "Diploma hash is not registered on-chain", nil)
+		}
+		if onChainArweaveTxID != req.ArweaveTxID {
+			return nil, apperrors.New(apperrors.ErrVerificationFailed, "On-chain Arweave transaction does not match the request", nil)
+		}
+	}
+
 	polygonURL := fmt.Sprintf("https://amoy.polygonscan.com/tx/%s", req.PolygonTxHash)
 	arweaveURL := fmt.Sprintf("https://arweave.net/%s", req.ArweaveTxID)
 
@@ -232,33 +248,56 @@ func (s *DiplomaService) ConfirmUpload(req dto.ConfirmUploadRequest) (*dto.Uploa
 	}, nil
 }
 
+// Verify checks a diploma both in the local DB and on the Polygon contract.
+// A diploma is only verified when the hash exists on-chain and points to the
+// same Arweave transaction as the DB record. A missing record returns
+// verified=false with no error; infrastructure failures (RPC down, contract
+// call failed) return an error so callers can distinguish "fake diploma"
+// from "verification unavailable".
 func (s *DiplomaService) Verify(req dto.VerifyDiplomaRequest) (dto.VerifyResponse, error) {
 
 	slog.Info("Verifying diploma from diplomaID")
 
-	var err error
-	var response dto.VerifyResponse
 	diplomaID := req.DiplomaID
+	response := dto.VerifyResponse{Verified: false, DiplomaID: diplomaID}
 
-	response.Verified = false
-
-	// Fetch metadata from DB if it exists
 	diploma, err := s.GetByDiplomaID(diplomaID)
-
-	if err == nil && diploma != nil {
-		response.Verified = true
-		response.StudentName = diploma.Owner
-		if diploma.MetaData.ID != uuid.Nil {
-			response.University = diploma.MetaData.University
-			response.Degree = fmt.Sprintf("%s - %s", diploma.MetaData.Faculty, diploma.MetaData.Department)
-			response.IssueDate = diploma.CreatedAt.Format("2006-01-02")
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response, nil
 		}
-		response.PolygonTxHash = diploma.PolygonTxID
-		response.ArweaveTxID = diploma.ArweaveTxID
-		response.ArweaveURL = diploma.ArweaveURL
-		response.DiplomaHash = diploma.Hash
-		response.DiplomaID = diplomaID
+		return response, apperrors.New(apperrors.ErrVerificationFailed, "Failed to look up diploma record", err)
 	}
+
+	if s.Blockchain == nil {
+		return response, apperrors.New(apperrors.ErrBlockchainFailed, "Blockchain service is not configured", nil)
+	}
+
+	// The smart contract is the source of truth.
+	exists, onChainArweaveTxID, err := s.Blockchain.VerifyDiploma(diploma.Hash)
+	if err != nil {
+		return response, apperrors.New(apperrors.ErrVerificationFailed, "On-chain verification failed", err)
+	}
+	if !exists {
+		slog.Warn("diploma found in DB but not on-chain", "diplomaID", diplomaID, "hash", diploma.Hash)
+		return response, nil
+	}
+	if onChainArweaveTxID != diploma.ArweaveTxID {
+		slog.Warn("on-chain Arweave tx mismatch", "diplomaID", diplomaID, "onChain", onChainArweaveTxID, "db", diploma.ArweaveTxID)
+		return response, nil
+	}
+
+	response.Verified = true
+	response.StudentName = diploma.Owner
+	if diploma.MetaData.ID != uuid.Nil {
+		response.University = diploma.MetaData.University
+		response.Degree = fmt.Sprintf("%s - %s", diploma.MetaData.Faculty, diploma.MetaData.Department)
+		response.IssueDate = diploma.CreatedAt.Format("2006-01-02")
+	}
+	response.PolygonTxHash = diploma.PolygonTxID
+	response.ArweaveTxID = diploma.ArweaveTxID
+	response.ArweaveURL = diploma.ArweaveURL
+	response.DiplomaHash = diploma.Hash
 
 	return response, nil
 }
