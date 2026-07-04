@@ -69,7 +69,7 @@ func (s *UserService) Register(req dto.RegisterRequest) error {
 	}
 
 	if err := tx.Create(&user).Error; err != nil {
-		slog.Error("Failed to create user: %v", err)
+		slog.Error("Failed to create user", "err", err)
 		return apperrors.New(apperrors.ErrUserCreationFailed, "User creation failed", err)
 	}
 

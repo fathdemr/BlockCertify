@@ -319,7 +319,7 @@ func (s *BlockchainService) StoreDiploma(diplomaHash, arweaveTxID string) (*dto.
 		)
 	}
 
-	slog.Info("Transaction confirmed in block %d", receipt.BlockNumber.Uint64())
+	slog.Info("Transaction confirmed", "block", receipt.BlockNumber.Uint64())
 
 	return &dto.BlockchainResult{
 		TransactionHash: receipt.TxHash.Hex(),

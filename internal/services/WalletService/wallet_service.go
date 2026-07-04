@@ -29,7 +29,7 @@ func (s *WalletService) ConnectWalletFromJSON(keyJSON []byte) (*goar.Wallet, err
 
 	wallet, err := goar.NewWallet(keyJSON, "https://arweave.net")
 	if err != nil {
-		slog.Error("NewWalletFromJSON error:", err)
+		slog.Error("NewWalletFromJSON error", "err", err)
 		return nil, err
 	}
 
@@ -53,7 +53,7 @@ func (s *WalletService) GetBalance(wallet *goar.Wallet) string {
 
 	balance, err := s.client.GetWalletBalance(wallet.Signer.Address)
 	if err != nil {
-		slog.Error("GetBalance error:", err)
+		slog.Error("GetBalance error", "err", err)
 		return ""
 	}
 
