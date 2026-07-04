@@ -3,7 +3,9 @@ package main
 import (
 	"BlockCertify/internal/config"
 	"BlockCertify/internal/logger"
+	"BlockCertify/internal/middleware"
 	"BlockCertify/internal/models"
+	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/routes"
 	"context"
 	"errors"
@@ -93,15 +95,18 @@ func main() {
 
 	routes.HealthRoutes(app)
 
+	authMw := middleware.NewAuthMiddleware(config.JWT, repositories.NewUserRepository(config.DB))
+
 	exapi := app.Group("/exapi")
-	routes.UserRoutes(exapi)
+	routes.UserRoutes(exapi, authMw)
 	routes.UniversityRoutes(exapi)
 	routes.PingRoutes(exapi)
 	routes.FacultyRoutes(exapi)
 	routes.DepartmentRoutes(exapi)
 
 	api := app.Group("/api")
-	routes.DiplomaRoutes(api)
+	api.Use(middleware.RateLimit(60, time.Minute))
+	routes.DiplomaRoutes(api, authMw)
 	routes.WalletRoutes(api)
 
 	// ── 4. HTTP Server ─────────────────────────────────────────────────────────

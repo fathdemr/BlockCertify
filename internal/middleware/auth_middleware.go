@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"BlockCertify/internal/models"
 	"BlockCertify/internal/repositories"
 	"BlockCertify/internal/security"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 type AuthMiddleware interface {
 	Authorize() gin.HandlerFunc
+	RequireRole(role models.UserRole) gin.HandlerFunc
 }
 
 type authMiddleware struct {
@@ -25,20 +27,32 @@ func NewAuthMiddleware(jwtHelper security.TokenHelper, userRepo repositories.Use
 	}
 }
 
+// extractToken reads the JWT from the Authorization header, falling back to the "jwt" cookie.
+func extractToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		tokenStr := strings.TrimSpace(authHeader)
+		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
+		tokenStr = strings.TrimPrefix(tokenStr, "bearer ")
+		return strings.TrimSpace(tokenStr)
+	}
+	if cookie, err := c.Cookie("jwt"); err == nil {
+		return strings.TrimSpace(cookie)
+	}
+	return ""
+}
+
 func (s *authMiddleware) Authorize() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		tokenStr := extractToken(c)
+		if tokenStr == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "No Authorization header found",
 			})
 			return
 		}
-
-		tokenStr := strings.Replace(authHeader, "Bearer ", "", 10)
-		tokenStr = strings.Replace(tokenStr, "bearer ", "", 10)
 
 		claims, err := s.jwtHelper.Verify(tokenStr)
 		if err != nil {
@@ -53,6 +67,7 @@ func (s *authMiddleware) Authorize() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid token",
 			})
+			return
 		}
 
 		user, err := s.userRepo.FindByEmail(email)
@@ -60,10 +75,36 @@ func (s *authMiddleware) Authorize() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "User not found",
 			})
+			return
 		}
 
 		c.Set("user", user)
+		c.Set("email", email)
 		c.Next()
+	}
+}
 
+// RequireRole must run after Authorize; it rejects users that don't have the given role.
+func (s *authMiddleware) RequireRole(role models.UserRole) gin.HandlerFunc {
+
+	return func(c *gin.Context) {
+
+		value, exists := c.Get("user")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Unauthorized",
+			})
+			return
+		}
+
+		user, ok := value.(*models.User)
+		if !ok || user.Role != role {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "Insufficient permissions",
+			})
+			return
+		}
+
+		c.Next()
 	}
 }
