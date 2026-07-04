@@ -25,6 +25,9 @@ func main() {
 	if err := config.InitConfigFile("./internal"); err != nil {
 		panic(err)
 	}
+	if err := config.InitJWT(); err != nil {
+		panic(err)
+	}
 	if err := config.InitDB(); err != nil {
 		panic(err)
 	}

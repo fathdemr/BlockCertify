@@ -5,7 +5,6 @@ import (
 	"BlockCertify/internal/dto"
 	"BlockCertify/internal/helper"
 	apperrors "BlockCertify/internal/pkg/errors"
-	"BlockCertify/internal/security"
 	"BlockCertify/internal/services/CacheService"
 	"BlockCertify/internal/services/UniversityService"
 	"BlockCertify/internal/services/UserService"
@@ -30,11 +29,10 @@ func extractEmailFromToken(c *gin.Context) (string, error) {
 	if tokenStr == "" {
 		return "", apperrors.New(apperrors.ErrInvalidToken, "No Authorization header", nil)
 	}
-	jwtHelper := security.NewJWTHelper(
-		config.Params.GetString("crypto.my_secret_key"),
-		time.Duration(config.Params.GetInt64("crypto.token_expire_duration_hour")),
-	)
-	claims, err := jwtHelper.Verify(tokenStr)
+	if config.JWT == nil {
+		return "", apperrors.New(apperrors.ErrInvalidToken, "JWT helper not initialized", nil)
+	}
+	claims, err := config.JWT.Verify(tokenStr)
 	if err != nil {
 		return "", err
 	}

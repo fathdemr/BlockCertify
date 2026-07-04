@@ -1,6 +1,7 @@
 package config
 
 import (
+	"BlockCertify/internal/security"
 	"BlockCertify/internal/services/ArweaveService"
 	"BlockCertify/internal/services/BlockchainService"
 	"errors"
@@ -38,7 +39,19 @@ var (
 	RedisClient    *redis.Client
 	Arweave        *ArweaveService.ArweaveService
 	Blockchain     *BlockchainService.BlockchainService
+	JWT            *security.JwtHelper
 )
+
+// InitJWT parses the RSA key pair from config and builds the shared JWT helper.
+// Must be called after InitConfigFile.
+func InitJWT() error {
+	helper, err := security.NewJWTHelperFromParams(Params)
+	if err != nil {
+		return fmt.Errorf("failed to init JWT helper: %w", err)
+	}
+	JWT = helper
+	return nil
+}
 
 func InitConfigFile(configPath string) error {
 	Params.SetConfigName("config")
