@@ -75,7 +75,10 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	helper.SetCookie(c, "jwt", response.Token, time.Now().Add(time.Hour*1))
+	// Cookie lifetime matches the JWT lifetime so the browser session doesn't
+	// outlive (or die before) the token itself.
+	tokenDuration := time.Duration(config.Params.GetUint64("crypto.token_expire_duration_hour")) * time.Hour
+	helper.SetCookie(c, "jwt", response.Token, time.Now().Add(tokenDuration))
 
 	c.JSON(http.StatusOK, response)
 }

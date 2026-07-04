@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"BlockCertify/internal/config"
 	"net/http"
 	"time"
 
@@ -8,22 +9,32 @@ import (
 )
 
 func SetCookie(c *gin.Context, name string, value string, expiration time.Time) {
-	cookie := buildCookie(name, value, expiration.Second())
-	http.SetCookie(c.Writer, cookie)
+	maxAge := int(time.Until(expiration).Seconds())
+	if maxAge < 0 {
+		maxAge = -1
+	}
+	http.SetCookie(c.Writer, buildCookie(name, value, maxAge))
 }
 
 func ClearCookie(c *gin.Context, name string) {
-	cookie := buildCookie(name, "", -1)
-	http.SetCookie(c.Writer, cookie)
+	http.SetCookie(c.Writer, buildCookie(name, "", -1))
 }
 
-func buildCookie(name string, value string, expires int) *http.Cookie {
+// buildCookie hardens auth cookies for browser use:
+//   - HttpOnly: not readable from JavaScript (XSS can't steal the token)
+//   - Secure (live only): never sent over plain HTTP; disabled locally so
+//     http://localhost development keeps working
+//   - SameSite=Lax: browsers won't attach the cookie to cross-site POSTs,
+//     which blocks CSRF against the cookie-authenticated endpoints
+func buildCookie(name string, value string, maxAge int) *http.Cookie {
 	cookie := &http.Cookie{
 		Name:     name,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
-		MaxAge:   expires,
+		Secure:   config.Params.GetString("environment") == "live",
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
 	}
 	return cookie
 }
